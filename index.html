@@ -488,7 +488,7 @@ async function parseXactimatePDF(arrayBuffer) {
   let currentRoom = 'General';
   let currentRoomCode = 'GENERAL';
 
-  for (let pageNum = 2; pageNum <= pdf.numPages; pageNum++) {
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
     const viewport = page.getViewport({ scale: 1.0 });
     const textContent = await page.getTextContent({ includeMarkedContent: false });
@@ -566,14 +566,22 @@ async function parseXactimatePDF(arrayBuffer) {
       if (/^\s*(Totals?|Total):/.test(lineText)) { pendingIdx = null; continue; }
 
       const first = lw[0]?.text || '';
-      const isLineItem = /^\d+\.$/.test(first);
+      // Accept "1." as one token, or "1" + "." as two adjacent tokens, or bare "1" at far left
+      const isLineItem = /^\d+\.$/.test(first) ||
+        (/^\d+$/.test(first) && lw[1]?.text === '.' && lw[1]?.x0 < 40) ||
+        (/^\d+$/.test(first) && lw[0]?.x0 < 30);
 
       if (!isLineItem && lw[0]?.x0 < 50 && lw.length <= 5 &&
           !lw.some(w => isNumVal(w.text)) &&
           lw.some(w => w.text.endsWith(':'))) continue;
 
       if (isLineItem) {
-        const descWords = lw.filter(w => w.x0 < 196 && w.text !== first);
+        // Strip the line number (and its period if separate) from desc candidates
+        const lineNumStr = first;
+        const hasSepPeriod = lw[1]?.text === '.' && lw[1]?.x0 < 40;
+        const descWords = lw.filter(w =>
+          w.x0 < 196 && w.text !== lineNumStr && !(hasSepPeriod && w.text === '.')
+        );
         const desc = descWords.map(w => w.text).join(' ');
 
         let qty = '', unit = '', unitPrice = '', tax = '', rcv = '', deprec = '', acv = '';
