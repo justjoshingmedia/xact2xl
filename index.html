@@ -442,12 +442,9 @@ async function parseXactimatePDF(arrayBuffer) {
   };
 
   const COLUMNS = [
-    '#','Group Code','Group Description','Desc','Age','Condition','Qty',
-    'Item Amount','Reported Cost','Unit Cost','Unit','Coverage','Activity',
-    "Worker's Wage",'Labor burden','Labor Overhead','Material','Equipment',
-    'Market Conditions','Labor Minimum','Sales Tax','RCV','Life',
-    'Depreciation Type','Depreciation Amount','Recoverable','ACV','Tax',
-    'Replace','Cat','Sel','Owner','Original Vendor','Date','Note 1'
+    '#','Group Code','Group Description','Desc',
+    'Qty','Unit','Unit Cost','O&P','Sales Tax',
+    'RCV','Depreciation Amount','ACV','Note 1'
   ];
 
   function getCol(x) {
@@ -575,9 +572,10 @@ async function parseXactimatePDF(arrayBuffer) {
       const first = lw[0]?.text || '';
       // Line items are a single token: "1. Description text..."
       const lineNumMatch = first.match(/^(\d+)\.\s*/);
-      // Guard: sketch dimension blocks can look like "1. SF Walls" — skip those
+      // Guard: sketch blocks emit "95." as lw[0] and "SF" as lw[1]; fall back to lw[1] when stripped text is empty
+      const descStart = first.replace(/^\d+\.\s*/, '') || (lw[1]?.text || '');
       const isLineItem = lineNumMatch !== null &&
-        !/^\s*(SF|LF|SY|CY|SQ|EA)\b/i.test(first.replace(/^\d+\.\s*/, ''));
+        !/^\s*(SF|LF|SY|CY|SQ|EA)\b/i.test(descStart);
 
       if (!isLineItem && lw[0]?.x0 < 50 && lw.length <= 5 &&
           !lw.some(w => isNumVal(w.text)) &&
@@ -589,7 +587,7 @@ async function parseXactimatePDF(arrayBuffer) {
         const descWords = lw.filter(w => w.x0 < 196 && w !== lw[0]);
         const desc = (descFromFirst + ' ' + descWords.map(w => w.text).join(' ')).trim();
 
-        let qty = '', unit = '', unitPrice = '', tax = '', rcv = '', deprec = '', acv = '';
+        let qty = '', unit = '', unitPrice = '', tax = '', oap = '', rcv = '', deprec = '', acv = '';
 
         for (const w of lw) {
           const col = getCol(w.x0);
@@ -600,6 +598,7 @@ async function parseXactimatePDF(arrayBuffer) {
             const n = cleanNum(w.text);
             if (col === 'unit_price') unitPrice = n;
             else if (col === 'tax') tax = n;
+            else if (col === 'oap') oap = n;
             else if (col === 'rcv') rcv = n;
             else if (col === 'deprec') deprec = n;
             else if (col === 'acv') acv = n;
@@ -616,6 +615,7 @@ async function parseXactimatePDF(arrayBuffer) {
         row['Qty'] = qty;
         row['Unit'] = unit;
         row['Unit Cost'] = unitPrice;
+        row['O&P'] = oap;
         row['Sales Tax'] = tax;
         row['RCV'] = rcv;
         row['Depreciation Amount'] = deprec;
@@ -641,12 +641,9 @@ async function parseXactimatePDF(arrayBuffer) {
 // ─── Excel generation ─────────────────────────────────────────────────────────
 function buildExcel(rows, filename) {
   const COLUMNS = [
-    '#','Group Code','Group Description','Desc','Age','Condition','Qty',
-    'Item Amount','Reported Cost','Unit Cost','Unit','Coverage','Activity',
-    "Worker's Wage",'Labor burden','Labor Overhead','Material','Equipment',
-    'Market Conditions','Labor Minimum','Sales Tax','RCV','Life',
-    'Depreciation Type','Depreciation Amount','Recoverable','ACV','Tax',
-    'Replace','Cat','Sel','Owner','Original Vendor','Date','Note 1'
+    '#','Group Code','Group Description','Desc',
+    'Qty','Unit','Unit Cost','O&P','Sales Tax',
+    'RCV','Depreciation Amount','ACV','Note 1'
   ];
 
   const wsData = [COLUMNS];
