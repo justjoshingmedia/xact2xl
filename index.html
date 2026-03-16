@@ -503,6 +503,13 @@ async function parseXactimatePDF(arrayBuffer) {
       .filter(w => !hasDoubledChars(w.text))
       .filter(w => !isDimension(w.text, w.x0));
 
+    // DEBUG — log every word on this page so we can see what the PDF contains
+    if (pageNum <= 2) {
+      console.group(`PAGE ${pageNum} — ${words.length} words, viewport ${Math.round(viewport.width)}x${Math.round(viewport.height)}`);
+      words.slice(0, 60).forEach(w => console.log(`  top=${Math.round(w.top).toString().padStart(4)} x0=${Math.round(w.x0).toString().padStart(4)}  "${w.text}"`));
+      console.groupEnd();
+    }
+
     const headerWords = words.filter(w => w.top < 150).sort((a, b) => a.x0 - b.x0);
     const headerText = headerWords.map(w => w.text).join(' ');
     const contMatch = headerText.match(/CONTINUED\s*-\s*(.+)/);
