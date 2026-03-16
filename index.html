@@ -430,48 +430,17 @@ function showError(msg) {
 // ─── PDF PARSING (isolated — update this function without touching UI) ────────
 async function parseXactimatePDF(arrayBuffer) {
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const allLines = [];
 
-  for (let p = 1; p <= pdf.numPages; p++) {
-    const page = await pdf.getPage(p);
-    const content = await page.getTextContent({ includeMarkedContent: false });
+  const COLS = {
+    qty:        [196, 270],
+    unit_price: [271, 330],
+    tax:        [331, 375],
+    oap:        [376, 426],
+    rcv:        [427, 484],
+    deprec:     [485, 536],
+    acv:        [537, 620],
+  };
 
-    const rawItems = content.items
-      .filter(it => it.str && it.str.trim())
-      .map(it => ({ x: it.transform[4], y: it.transform[5], str: it.str.trim(), page: p }));
-
-    rawItems.sort((a, b) => b.y - a.y);
-    const pageLines = [];
-    for (const item of rawItems) {
-      const existing = pageLines.find(ln => Math.abs(ln.y - item.y) <= 3);
-      if (existing) {
-        existing.items.push(item);
-      } else {
-        pageLines.push({ y: item.y, items: [item], page: p });
-      }
-    }
-    for (const ln of pageLines) {
-      ln.items.sort((a, b) => a.x - b.x);
-      ln.text = ln.items.map(i => i.str).join(' ');
-    }
-    pageLines.sort((a, b) => b.y - a.y);
-    allLines.push(...pageLines);
-  }
-
-  // ── Debug: log first 30 lines so we can see the raw PDF structure ──────
-  console.group('Xact2XL — raw PDF lines (first 30)');
-  allLines.slice(0, 30).forEach((ln, i) => {
-    const items = ln.items.map(it => `[x=${Math.round(it.x)} "${it.str}"]`).join('  ');
-    console.log(`${String(i).padStart(2,'0')} y=${Math.round(ln.y)}  ${items}`);
-  });
-  console.log(`Total lines across all pages: ${allLines.length}`);
-  console.groupEnd();
-
-  return extractLineItems(allLines);
-}
-
-// ─── Line-item extraction ─────────────────────────────────────────────────────
-function extractLineItems(lines) {
   const COLUMNS = [
     '#','Group Code','Group Description','Desc','Age','Condition','Qty',
     'Item Amount','Reported Cost','Unit Cost','Unit','Coverage','Activity',
@@ -481,191 +450,179 @@ function extractLineItems(lines) {
     'Replace','Cat','Sel','Owner','Original Vendor','Date','Note 1'
   ];
 
-  // ── Step 1: Detect column header row ───────────────────────────────────
-  const HEADER_TO_FIELD = {
-    'qty': 'Qty', 'quantity': 'Qty',
-    'unit cost': 'Unit Cost', 'unit price': 'Unit Cost', 'price': 'Unit Cost',
-    'tax': 'Sales Tax',
-    'rcv': 'RCV',
-    'dep': 'Depreciation Amount', 'dep %': 'Depreciation Amount',
-    'depreciation': 'Depreciation Amount',
-    'acv': 'ACV',
-  };
+  function getCol(x) {
+    for (const [col, [lo, hi]] of Object.entries(COLS)) {
+      if (x >= lo && x < hi) return col;
+    }
+    return null;
+  }
 
-  const colX = {};
-  let headerLineY = null;
+  function cleanNum(s) {
+    return s.replace(/,/g, '').replace(/[()]/g, '').trim();
+  }
 
-  for (const line of lines) {
-    let hits = 0;
-    const found = {};
-    for (let j = 0; j < line.items.length; j++) {
-      const key1 = line.items[j].str.toLowerCase().trim();
-      const key2 = j + 1 < line.items.length
-        ? (key1 + ' ' + line.items[j+1].str.toLowerCase().trim()) : '';
-      if (key2 && HEADER_TO_FIELD[key2]) {
-        found[HEADER_TO_FIELD[key2]] = line.items[j].x;
-        hits++; j++;
-      } else if (HEADER_TO_FIELD[key1]) {
-        found[HEADER_TO_FIELD[key1]] = line.items[j].x;
-        hits++;
+  function isNumVal(s) {
+    return !isNaN(parseFloat(cleanNum(s))) && isFinite(cleanNum(s));
+  }
+
+  function parseQtyUnit(text) {
+    const m = text.match(/^([\d,]+\.?\d*)\s*(SF|LF|EA|SY|HR|MO|CF|LS|SQ|GL|LB|PR|BX|CS|CY|TN|DA|CAL|GAL|BF|MBF)$/i);
+    if (m) return { qty: cleanNum(m[1]), unit: m[2].toUpperCase() };
+    return null;
+  }
+
+  function hasDoubledChars(text) {
+    if (text.length < 4) return false;
+    let doubled = 0;
+    for (let i = 0; i < text.length - 1; i++) {
+      if (text[i] === text[i + 1]) doubled++;
+    }
+    return doubled >= Math.floor(text.length / 3);
+  }
+
+  function isDimension(text, x) {
+    return x < 200 && /^[\d]+'?"?$/.test(text.trim());
+  }
+
+  const results = [];
+  let currentRoom = 'General';
+  let currentRoomCode = 'GENERAL';
+
+  for (let pageNum = 2; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const viewport = page.getViewport({ scale: 1.0 });
+    const textContent = await page.getTextContent({ includeMarkedContent: false });
+
+    let words = textContent.items
+      .filter(item => item.str && item.str.trim())
+      .map(item => ({
+        text: item.str.trim(),
+        x0: item.transform[4],
+        top: viewport.height - item.transform[5] - (item.height || 0),
+      }))
+      .filter(w => !hasDoubledChars(w.text))
+      .filter(w => !isDimension(w.text, w.x0));
+
+    const headerWords = words.filter(w => w.top < 150).sort((a, b) => a.x0 - b.x0);
+    const headerText = headerWords.map(w => w.text).join(' ');
+    const contMatch = headerText.match(/CONTINUED\s*-\s*(.+)/);
+    if (contMatch) {
+      currentRoom = contMatch[1].trim();
+      currentRoomCode = currentRoom.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+    }
+
+    let colHeaderTop = null;
+    for (const w of words) {
+      if (w.text === 'DESCRIPTION' && w.x0 < 100) {
+        colHeaderTop = w.top;
+        break;
       }
     }
-    if (hits >= 2) {
-      Object.assign(colX, found);
-      headerLineY = line.y;
-      break;
-    }
-  }
 
-  console.log('Xact2XL — column header found:', headerLineY !== null, 'colX:', colX);
-
-  const qtyX = colX['Qty'];
-  const descBoundaryX = qtyX != null ? qtyX - 10 : null;
-
-  function closestNumericCol(x) {
-    let best = null, bestDist = 55;
-    for (const [field, fx] of Object.entries(colX)) {
-      const d = Math.abs(x - fx);
-      if (d < bestDist) { bestDist = d; best = field; }
-    }
-    return best;
-  }
-
-  // ── Step 2: Main parse loop ─────────────────────────────────────────────
-  const rows = [];
-  let currentGroup = '';
-  let currentGroupDesc = '';
-  let pendingItem = null;
-
-  function flushPending() {
-    if (pendingItem) { rows.push(pendingItem); pendingItem = null; }
-  }
-
-  function makeGroupCode(name) {
-    return name.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
-  }
-
-  const IS_NUM = /^-?[\d,]+\.?\d*$/;
-  const UNIT_CODE = /^(SF|LF|EA|SY|CY|LS|SQ|HR|BD|CF|FF|MBF|GAL|TN|PR|BG|RL|PK|LB|FT|YD|VF|JT)$/i;
-  const ACTIVITY_RE = /\b(Remove and Replace|R&R|Remove|Replace|Install|Clean|Seal|Paint|Prime|Detach & Reset|D&R)\b/i;
-  const CAT_SEL_RE = /^([A-Z]{2,6})\s+([A-Z]{2,6})$/;
-  const SKIP_RE = /^(page\b|continued\b|description\b|qty\b|unit\s+price|unit\s+cost|o&p\b|rcv\b|dep\b|acv\b|depreciation\b|overhead\b|profit\b|subtotal\b|replacement\s+cost|actual\s+cash|line\s+items|estimate\s+total)/i;
-
-  // Track line items seen for debug
-  let lineItemsSeen = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const { items } = line;
-    const text = line.text.trim();
-
-    if (!text || text.length < 2) continue;
-    if (headerLineY !== null && Math.abs(line.y - headerLineY) < 3) continue;
-    if (SKIP_RE.test(text)) continue;
-
-    const firstStr = items[0]?.str.trim() ?? '';
-    // Detect line item: first token is digits (with or without trailing period)
-    // and is positioned at the far left (x < 40)
-    const lineNumMatch = /^\d+\.?$/.test(firstStr) && items[0].x < 40
-      ? firstStr.replace('.', '') : null;
-
-    if (lineNumMatch) {
-      flushPending();
-      lineItemsSeen++;
-
-      const item = {
-        '#': lineNumMatch,
-        'Group Code': currentGroup,
-        'Group Description': currentGroupDesc,
-      };
-
-      const descParts = [];
-
-      for (let j = 1; j < items.length; j++) {
-        const it = items[j];
-        const str = it.str.trim();
-        if (!str) continue;
-
-        // Skip the period if it's a separate token right after the line number
-        if (j === 1 && str === '.') continue;
-
-        const numStr = str.replace(/,/g, '');
-
-        if (IS_NUM.test(numStr)) {
-          const col = closestNumericCol(it.x);
-          if (col) item[col] = numStr;
-        } else if (UNIT_CODE.test(str)) {
-          item['Unit'] = str.toUpperCase();
-        } else if (descBoundaryX == null || it.x < descBoundaryX) {
-          descParts.push(str);
+    if (!contMatch && colHeaderTop) {
+      const titleWords = words.filter(w =>
+        w.top > 100 && w.top < colHeaderTop &&
+        w.x0 > 130 && w.x0 < 450 &&
+        !['Height:', 'SF', 'LF', 'SY', 'YA', 'Group'].some(s => w.text.includes(s))
+      );
+      const titleLineMap = {};
+      for (const w of titleWords) {
+        const key = Math.round(w.top / 5) * 5;
+        if (!titleLineMap[key]) titleLineMap[key] = [];
+        titleLineMap[key].push(w);
+      }
+      for (const key of Object.keys(titleLineMap).sort((a, b) => a - b)) {
+        const lw = titleLineMap[key].sort((a, b) => a.x0 - b.x0);
+        const candidate = lw.map(w => w.text).join(' ').trim();
+        if (candidate && !/\d/.test(candidate) &&
+            candidate.split(' ').length >= 1 &&
+            candidate.split(' ').length <= 5 &&
+            !candidate.startsWith('***')) {
+          currentRoom = candidate;
+          currentRoomCode = candidate.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+          break;
         }
       }
-
-      item['Desc'] = descParts.join(' ').trim();
-      pendingItem = item;
-      continue;
     }
 
-    if (pendingItem) {
-      if (/^[A-Za-z][A-Za-z0-9 \/\-']*:\s*$/.test(text)) continue;
-      if (/^[\d\s$,.()\-]+$/.test(text)) { flushPending(); continue; }
+    const lineMap = {};
+    for (const w of words) {
+      const key = Math.round(w.top / 4) * 4;
+      if (!lineMap[key]) lineMap[key] = [];
+      lineMap[key].push(w);
+    }
 
-      const actMatch = text.match(ACTIVITY_RE);
-      if (actMatch) {
-        const a = actMatch[1];
-        pendingItem['Activity'] = (a === 'R&R' || a === 'D&R') ? 'Remove and Replace' : a;
-      }
+    const SKIP_PHRASES = ['YA Group','Chattanooga','WE-','DESCRIPTION','QUANTITY',
+                          'Page:','CONTINUED','Grand Total','Height:',
+                          'YOUNG &','Nashville','Jackson','Insured:','Property:'];
 
-      const csMatch = text.match(CAT_SEL_RE);
-      if (csMatch) {
-        pendingItem['Cat'] = csMatch[1];
-        pendingItem['Sel'] = csMatch[2];
-      }
+    let pendingIdx = null;
 
-      if (!actMatch && !csMatch) {
-        let gotNumber = false;
-        for (const it of items) {
-          const numStr = it.str.trim().replace(/,/g, '');
-          if (IS_NUM.test(numStr)) {
-            const col = closestNumericCol(it.x);
-            if (col && !pendingItem[col]) { pendingItem[col] = numStr; gotNumber = true; }
+    for (const topKey of Object.keys(lineMap).sort((a, b) => a - b)) {
+      const lw = lineMap[topKey].sort((a, b) => a.x0 - b.x0);
+      const lineText = lw.map(w => w.text).join(' ');
+
+      if (SKIP_PHRASES.some(s => lineText.includes(s))) continue;
+      if (/^\s*(Totals?|Total):/.test(lineText)) { pendingIdx = null; continue; }
+
+      const first = lw[0]?.text || '';
+      const isLineItem = /^\d+\.$/.test(first);
+
+      if (!isLineItem && lw[0]?.x0 < 50 && lw.length <= 5 &&
+          !lw.some(w => isNumVal(w.text)) &&
+          lw.some(w => w.text.endsWith(':'))) continue;
+
+      if (isLineItem) {
+        const descWords = lw.filter(w => w.x0 < 196 && w.text !== first);
+        const desc = descWords.map(w => w.text).join(' ');
+
+        let qty = '', unit = '', unitPrice = '', tax = '', rcv = '', deprec = '', acv = '';
+
+        for (const w of lw) {
+          const col = getCol(w.x0);
+          if (col === 'qty') {
+            const qu = parseQtyUnit(w.text);
+            if (qu) { qty = qu.qty; unit = qu.unit; }
+          } else if (col && isNumVal(w.text)) {
+            const n = cleanNum(w.text);
+            if (col === 'unit_price') unitPrice = n;
+            else if (col === 'tax') tax = n;
+            else if (col === 'rcv') rcv = n;
+            else if (col === 'deprec') deprec = n;
+            else if (col === 'acv') acv = n;
           }
         }
-        if (!gotNumber && text.length > 8 && !SKIP_RE.test(text) && !UNIT_CODE.test(text)) {
-          if (!pendingItem['Note 1']) pendingItem['Note 1'] = text;
+
+        pendingIdx = results.length;
+        const row = {};
+        for (const c of COLUMNS) row[c] = '';
+        row['#'] = String(results.length + 1);
+        row['Group Code'] = currentRoomCode;
+        row['Group Description'] = currentRoom;
+        row['Desc'] = desc;
+        row['Qty'] = qty;
+        row['Unit'] = unit;
+        row['Unit Cost'] = unitPrice;
+        row['Sales Tax'] = tax;
+        row['RCV'] = rcv;
+        row['Depreciation Amount'] = deprec;
+        row['ACV'] = acv;
+        results.push(row);
+
+      } else if (pendingIdx !== null) {
+        const contText = lw.filter(w => w.x0 < 196).map(w => w.text).join(' ').trim();
+        if (!contText) continue;
+        if (contText.startsWith('*')) {
+          results[pendingIdx]['Note 1'] = contText.replace(/\*/g, '').trim();
+          pendingIdx = null;
+        } else {
+          results[pendingIdx]['Desc'] += ' ' + contText;
         }
-      }
-      continue;
-    }
-
-    flushPending();
-
-    if (text.endsWith(':')) continue;
-    if (/^[\d\s$,.()\-]+$/.test(text)) continue;
-    if (SKIP_RE.test(text)) continue;
-
-    const words = text.split(/\s+/);
-    if (words.length >= 1 && words.length <= 8 && /[A-Za-z]/.test(text) && !text.includes('$')) {
-      const dashIdx = text.search(/\s*[-–]\s*/);
-      if (dashIdx > -1) {
-        currentGroup = makeGroupCode(text.slice(0, dashIdx).trim());
-        currentGroupDesc = text.slice(dashIdx).replace(/^[-–\s]+/, '').trim();
-      } else {
-        currentGroup = makeGroupCode(text);
-        currentGroupDesc = text;
       }
     }
   }
 
-  flushPending();
-
-  console.log(`Xact2XL — line items detected: ${lineItemsSeen}, rows built: ${rows.length}`);
-
-  return rows.map(item => {
-    const row = {};
-    for (const col of COLUMNS) row[col] = item[col] || '';
-    return row;
-  });
+  return results;
 }
 
 // ─── Excel generation ─────────────────────────────────────────────────────────
