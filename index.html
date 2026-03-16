@@ -436,8 +436,8 @@ async function parseXactimatePDF(arrayBuffer) {
     unit_price: [271, 330],
     tax:        [331, 375],
     oap:        [376, 426],
-    rcv:        [427, 484],
-    deprec:     [485, 536],
+    rcv:        [420, 490],
+    deprec:     [490, 540],
     acv:        [537, 620],
   };
 
@@ -575,7 +575,9 @@ async function parseXactimatePDF(arrayBuffer) {
       const first = lw[0]?.text || '';
       // Line items are a single token: "1. Description text..."
       const lineNumMatch = first.match(/^(\d+)\.\s*/);
-      const isLineItem = lineNumMatch !== null;
+      // Guard: sketch dimension blocks can look like "1. SF Walls" — skip those
+      const isLineItem = lineNumMatch !== null &&
+        !/^\s*(SF|LF|SY|CY|SQ|EA)\b/i.test(first.replace(/^\d+\.\s*/, ''));
 
       if (!isLineItem && lw[0]?.x0 < 50 && lw.length <= 5 &&
           !lw.some(w => isNumVal(w.text)) &&
