@@ -640,11 +640,19 @@ async function parseXactimatePDF(arrayBuffer) {
 
 // ─── Excel generation ─────────────────────────────────────────────────────────
 function buildExcel(rows, filename) {
-  const COLUMNS = [
+  // Preferred column order — only columns with at least one non-empty value are included
+  const COL_ORDER = [
     '#','Group Code','Group Description','Desc',
     'Qty','Unit','Unit Cost','O&P','Sales Tax',
     'RCV','Depreciation Amount','ACV','Note 1'
   ];
+  const seen = new Set();
+  for (const row of rows) {
+    for (const [k, v] of Object.entries(row)) {
+      if (v !== '' && v != null) seen.add(k);
+    }
+  }
+  const COLUMNS = COL_ORDER.filter(c => seen.has(c));
 
   const wsData = [COLUMNS];
   for (const row of rows) {
