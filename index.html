@@ -601,14 +601,18 @@ async function parseXactimatePDF(arrayBuffer) {
           if (col === 'qty') {
             const qu = parseQtyUnit(w.text);
             if (qu) { qty = qu.qty; unit = qu.unit; }
+            else if (isNumVal(w.text) && !unitPrice) { unitPrice = cleanNum(w.text); }
           } else if (col && isNumVal(w.text)) {
             const n = cleanNum(w.text);
-            if (col === 'unit_price') unitPrice = n;
-            else if (col === 'tax') tax = n;
-            else if (col === 'oap') oap = n;
-            else if (col === 'rcv') rcv = n;
-            else if (col === 'deprec') deprec = n;
-            else if (col === 'acv') acv = n;
+            const isNeg = w.text.startsWith('(');
+            if (isNeg) {
+              if (!deprec) deprec = n;
+            } else if (col === 'unit_price' && !unitPrice) unitPrice = n;
+            else if (col === 'tax'          && !tax)       tax = n;
+            else if (col === 'oap'          && !oap)       oap = n;
+            else if (col === 'rcv'          && !rcv)       rcv = n;
+            else if (col === 'deprec'       && !deprec)    deprec = n;
+            else if (col === 'acv'          && !acv)       acv = n;
           }
         }
 
@@ -638,14 +642,20 @@ async function parseXactimatePDF(arrayBuffer) {
           if (col === 'qty') {
             const qu = parseQtyUnit(w.text);
             if (qu && !pr['Qty']) { pr['Qty'] = qu.qty; pr['Unit'] = qu.unit; }
+            else if (!qu && isNumVal(w.text) && !pr['Unit Cost']) { pr['Unit Cost'] = cleanNum(w.text); }
           } else if (col && isNumVal(w.text)) {
             const n = cleanNum(w.text);
-            if      (col === 'unit_price' && !pr['Unit Cost'])           pr['Unit Cost'] = n;
-            else if (col === 'tax'        && !pr['Sales Tax'])           pr['Sales Tax'] = n;
-            else if (col === 'oap'        && !pr['O&P'])                 pr['O&P'] = n;
-            else if (col === 'rcv'        && !pr['RCV'])                 pr['RCV'] = n;
-            else if (col === 'deprec'     && !pr['Depreciation Amount']) pr['Depreciation Amount'] = n;
-            else if (col === 'acv'        && !pr['ACV'])                 pr['ACV'] = n;
+            const isNeg = w.text.startsWith('(');
+            if (isNeg) {
+              if (!pr['Depreciation Amount']) pr['Depreciation Amount'] = n;
+            } else {
+              if      (col === 'unit_price' && !pr['Unit Cost'])           pr['Unit Cost'] = n;
+              else if (col === 'tax'        && !pr['Sales Tax'])           pr['Sales Tax'] = n;
+              else if (col === 'oap'        && !pr['O&P'])                 pr['O&P'] = n;
+              else if (col === 'rcv'        && !pr['RCV'])                 pr['RCV'] = n;
+              else if (col === 'deprec'     && !pr['Depreciation Amount']) pr['Depreciation Amount'] = n;
+              else if (col === 'acv'        && !pr['ACV'])                 pr['ACV'] = n;
+            }
           }
         }
         const contText = lw.filter(w => w.x0 < 200).map(w => w.text).join(' ').trim();
@@ -681,10 +691,16 @@ function buildExcel(rows, filename) {
     }
   }
   const COLUMNS = COL_ORDER.filter(c => seen.has(c));
+  const NUMERIC_COLS = new Set(['Qty','Unit Cost','O&P','Sales Tax','RCV','Depreciation Amount','ACV']);
 
   const wsData = [COLUMNS];
   for (const row of rows) {
-    wsData.push(COLUMNS.map(c => row[c] || ''));
+    wsData.push(COLUMNS.map(c => {
+      const v = row[c];
+      if (!v && v !== 0) return '';
+      if (NUMERIC_COLS.has(c)) { const n = parseFloat(v); return isNaN(n) ? v : n; }
+      return v;
+    }));
   }
 
   const wb = XLSX.utils.book_new();
