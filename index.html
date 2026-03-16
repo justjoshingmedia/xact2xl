@@ -573,17 +573,19 @@ async function parseXactimatePDF(arrayBuffer) {
       if (/^\s*(Totals?|Total):/.test(lineText)) { pendingIdx = null; continue; }
 
       const first = lw[0]?.text || '';
-      // Match "1." as one token, OR bare "1" when next token is "." or x0 is at far left margin
-      const isLineItem = /^\d+\.$/.test(first) ||
-        (/^\d+$/.test(first) && lw[0].x0 < 30);
+      // Line items are a single token: "1. Description text..."
+      const lineNumMatch = first.match(/^(\d+)\.\s*/);
+      const isLineItem = lineNumMatch !== null;
 
       if (!isLineItem && lw[0]?.x0 < 50 && lw.length <= 5 &&
           !lw.some(w => isNumVal(w.text)) &&
           lw.some(w => w.text.endsWith(':'))) continue;
 
       if (isLineItem) {
-        const descWords = lw.filter(w => w.x0 < 196 && w.text !== first);
-        const desc = descWords.map(w => w.text).join(' ');
+        // Description is everything after "N. " in the first token, plus any x0<196 continuation words
+        const descFromFirst = first.replace(/^\d+\.\s*/, '');
+        const descWords = lw.filter(w => w.x0 < 196 && w !== lw[0]);
+        const desc = (descFromFirst + ' ' + descWords.map(w => w.text).join(' ')).trim();
 
         let qty = '', unit = '', unitPrice = '', tax = '', rcv = '', deprec = '', acv = '';
 
