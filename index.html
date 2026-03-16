@@ -430,35 +430,49 @@ function showError(msg) {
 // ─── PDF PARSING (isolated — update this function without touching UI) ────────
 async function parseXactimatePDF(arrayBuffer) {
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const totalPages = pdf.numPages;
-
   const allLines = [];
 
-  for (let p = 1; p <= totalPages; p++) {
+  for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
     const content = await page.getTextContent({ includeMarkedContent: false });
 
-    // Group text items by approximate Y position (same line = within 3 units)
-    const yMap = new Map();
-    for (const item of content.items) {
-      if (!item.str || !item.str.trim()) continue;
-      const y = Math.round(item.transform[5]);
-      if (!yMap.has(y)) yMap.set(y, []);
-      yMap.get(y).push({ x: item.transform[4], str: item.str.trim(), y });
+    // Collect raw items with precise coordinates
+    const rawItems = content.items
+      .filter(it => it.str && it.str.trim())
+      .map(it => ({ x: it.transform[4], y: it.transform[5], str: it.str.trim(), page: p }));
+
+    // Cluster items into visual lines: group items within ±3 Y units of each other
+    rawItems.sort((a, b) => b.y - a.y); // top-to-bottom
+    const pageLines = [];
+    for (const item of rawItems) {
+      const existing = pageLines.find(ln => Math.abs(ln.y - item.y) <= 3);
+      if (existing) {
+        existing.items.push(item);
+      } else {
+        pageLines.push({ y: item.y, items: [item], page: p });
+      }
     }
 
-    // Sort lines top-to-bottom, items left-to-right
-    const sortedYs = [...yMap.keys()].sort((a, b) => b - a);
-    for (const y of sortedYs) {
-      const items = yMap.get(y).sort((a, b) => a.x - b.x);
-      allLines.push({ y, text: items.map(i => i.str).join(' '), items, page: p });
+    for (const ln of pageLines) {
+      ln.items.sort((a, b) => a.x - b.x); // left-to-right
+      ln.text = ln.items.map(i => i.str).join(' ');
     }
+    pageLines.sort((a, b) => b.y - a.y); // ensure top-to-bottom order
+    allLines.push(...pageLines);
   }
 
   return extractLineItems(allLines);
 }
 
 // ─── Line-item extraction ─────────────────────────────────────────────────────
+//
+// Strategy: Xactimate PDFs use fixed positional columns. Numbers appear at
+// specific X coordinates with no labels. We detect the column-header row to
+// learn each column's X anchor, then assign every numeric value by proximity.
+//
+// Column order (left → right):
+//   [#] [Description / Activity / Cat Sel] [Qty] [Unit] [Unit Cost] [Tax] [O&P] [RCV] [Dep%] [Dep$] [ACV]
+//
 function extractLineItems(lines) {
   const COLUMNS = [
     '#','Group Code','Group Description','Desc','Age','Condition','Qty',
@@ -469,197 +483,218 @@ function extractLineItems(lines) {
     'Replace','Cat','Sel','Owner','Original Vendor','Date','Note 1'
   ];
 
+  // ── Step 1: Detect column header row to get X anchors ──────────────────
+  // Maps lowercased header text → our field name
+  const HEADER_TO_FIELD = {
+    'qty': 'Qty', 'quantity': 'Qty',
+    'unit cost': 'Unit Cost', 'unit price': 'Unit Cost', 'price': 'Unit Cost',
+    'tax': 'Sales Tax',
+    'rcv': 'RCV',
+    'dep': 'Depreciation Amount', 'dep %': 'Depreciation Amount',
+    'depreciation': 'Depreciation Amount',
+    'acv': 'ACV',
+  };
+
+  const colX = {}; // field name → X coordinate from header row
+  let headerLineY = null;
+
+  for (const line of lines) {
+    let hits = 0;
+    const found = {};
+    for (let j = 0; j < line.items.length; j++) {
+      const key1 = line.items[j].str.toLowerCase().trim();
+      const key2 = j + 1 < line.items.length
+        ? (key1 + ' ' + line.items[j+1].str.toLowerCase().trim())
+        : '';
+      // Try two-word key first ("unit cost", "unit price", "dep %")
+      if (key2 && HEADER_TO_FIELD[key2]) {
+        found[HEADER_TO_FIELD[key2]] = line.items[j].x;
+        hits++; j++; // consume both items
+      } else if (HEADER_TO_FIELD[key1]) {
+        found[HEADER_TO_FIELD[key1]] = line.items[j].x;
+        hits++;
+      }
+    }
+    if (hits >= 2) {
+      Object.assign(colX, found);
+      headerLineY = line.y;
+      break;
+    }
+  }
+
+  // ── Step 2: Determine description/numeric boundary ─────────────────────
+  // Everything left of Qty column (minus a small margin) is description text.
+  // If no Qty header found, fall back to 60% of page width heuristic.
+  const qtyX = colX['Qty'];
+  const descBoundaryX = qtyX != null ? qtyX - 10 : null;
+
+  // ── Helper: assign a numeric value to the closest column by X ──────────
+  function closestNumericCol(x) {
+    let best = null, bestDist = 55; // must be within 55 pt of a known column
+    for (const [field, fx] of Object.entries(colX)) {
+      const d = Math.abs(x - fx);
+      if (d < bestDist) { bestDist = d; best = field; }
+    }
+    return best;
+  }
+
+  // ── Step 3: Main parse loop ─────────────────────────────────────────────
   const rows = [];
   let currentGroup = '';
   let currentGroupDesc = '';
-  let lineItemCounter = 0;
-
-  // Patterns
-  const ROOM_HEADER = /^([A-Z][A-Za-z0-9 '\-\/&]+)(?:\s*[-–]\s*(.+))?$/;
-  const LINE_ITEM_RE = /^(\d+)\.\s+(.+)/;
-  const MONEY_RE = /\$?([\d,]+\.?\d*)/;
-  const QTY_UNIT_RE = /(\d+\.?\d*)\s+(SF|LF|EA|SY|CY|LF|LS|SQ|HR|BD|CF|FF|MBF|GAL|TN|PR|BG|RL|PK)\b/i;
-  const CAT_SEL_RE = /\b([A-Z]{2,6})\s+([A-Z]{2,6})\b/;
-  const ACTIVITY_RE = /\b(Remove and Replace|R&R|Remove|Replace|Install|Clean|Seal|Paint|Prime)\b/i;
-  const DEPRECIATION_RE = /Deprec(?:iation)?\s*[:\-]?\s*\$?([\d,]+\.?\d*)/i;
-  const RCV_RE = /RCV\s*[:\-]?\s*\$?([\d,]+\.?\d*)/i;
-  const ACV_RE = /ACV\s*[:\-]?\s*\$?([\d,]+\.?\d*)/i;
-  const TAX_RE = /(?:Sales\s*)?Tax\s*[:\-]?\s*\$?([\d,]+\.?\d*)/i;
-  const UNIT_COST_RE = /(?:Unit\s*Cost|@)\s*\$?([\d,]+\.?\d*)/i;
-
-  // Keywords that indicate section headers (not line items)
-  const SKIP_LINES = /^(Page|Date|Claim|Policy|Insured|Adjuster|Contractor|Company|Phone|Fax|Email|Address|City|State|Zip|License|CONTINUED|SUBTOTAL|TOTAL|SUMMARY|DESCRIPTION|QUANTITY|UNIT|UNIT COST|AMOUNT|ROOM|AREA|COVERAGE|LABOR|MATERIAL|OVERHEAD|PROFIT|TAX|DEPRECIATION|REPLACEMENT|ACTUAL)/i;
-
-  // Track pending line item for multi-line accumulation
   let pendingItem = null;
 
   function flushPending() {
-    if (pendingItem) {
-      rows.push(pendingItem);
-      pendingItem = null;
-    }
+    if (pendingItem) { rows.push(pendingItem); pendingItem = null; }
   }
 
   function makeGroupCode(name) {
     return name.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
   }
 
-  // Detect if this looks like a room/section header
-  function isRoomHeader(line, nextLine) {
-    const t = line.text.trim();
-    // Skip if it's a known non-header
-    if (SKIP_LINES.test(t)) return false;
-    // Skip if it looks like a line item
-    if (LINE_ITEM_RE.test(t)) return false;
-    // Skip if it's all numbers or money
-    if (/^\$?[\d,\.\s]+$/.test(t)) return false;
-    // Skip short strings (likely codes)
-    if (t.length < 3) return false;
-    // A room header is typically a line with just text, followed by line items
-    // Check if next few non-empty lines contain numbered items
-    const isAllCaps = t === t.toUpperCase() && /[A-Z]/.test(t);
-    const hasCapWords = /^[A-Z][a-z]/.test(t);
-    const isShortPhrase = t.split(' ').length <= 6 && t.split(' ').length >= 1;
-    return (isAllCaps || hasCapWords) && isShortPhrase && !t.includes('$');
-  }
+  // Matches a bare number (integer or decimal, possibly negative, with commas)
+  const IS_NUM = /^-?[\d,]+\.?\d*$/;
+  // Xactimate unit codes
+  const UNIT_CODE = /^(SF|LF|EA|SY|CY|LS|SQ|HR|BD|CF|FF|MBF|GAL|TN|PR|BG|RL|PK|LB|FT|YD|EA|VF|JT)$/i;
+  // Activity keywords that appear on the second line of a line item
+  const ACTIVITY_RE = /\b(Remove and Replace|R&R|Remove|Replace|Install|Clean|Seal|Paint|Prime|Detach & Reset|D&R)\b/i;
+  // CAT + SEL: two separate uppercase-only tokens (2–6 chars each), no lowercase
+  const CAT_SEL_RE = /^([A-Z]{2,6})\s+([A-Z]{2,6})$/;
+  // Lines to skip entirely (page chrome, column headers, totals)
+  const SKIP_RE = /^(page\b|continued\b|description\b|qty\b|unit\b|unit\s+price|unit\s+cost|tax\b|o&p\b|rcv\b|dep\b|acv\b|depreciation\b|overhead\b|profit\b|subtotal\b|total\b|replacement\s+cost|actual\s+cash|line\s+items|estimate\s+total|claim\s+#|policy\s+#|insured:|adjuster:|contractor:)/i;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    const { items } = line;
     const text = line.text.trim();
 
     if (!text || text.length < 2) continue;
+    // Skip the column header row itself
+    if (headerLineY !== null && Math.abs(line.y - headerLineY) < 3) continue;
+    if (SKIP_RE.test(text)) continue;
 
-    // Check for line item pattern: "1. Description ..."
-    const liMatch = text.match(LINE_ITEM_RE);
-    if (liMatch) {
+    // ── Detect line item start ──────────────────────────────────────────
+    // The line number is its own PDF text object at the far left.
+    // It looks like "1" or "1." — possibly with a period attached.
+    const firstStr = items[0]?.str.trim() ?? '';
+    const lineNumMatch = firstStr.match(/^(\d+)\.?$/);
+
+    if (lineNumMatch) {
       flushPending();
-      lineItemCounter++;
-      const num = liMatch[1];
-      const rest = liMatch[2];
 
-      // Try to parse all fields from this line
-      const item = {};
-      item['#'] = num;
-      item['Group Code'] = currentGroup;
-      item['Group Description'] = currentGroupDesc;
+      const item = {
+        '#': lineNumMatch[1],
+        'Group Code': currentGroup,
+        'Group Description': currentGroupDesc,
+      };
 
-      // Extract qty+unit
-      const quMatch = rest.match(QTY_UNIT_RE);
-      if (quMatch) {
-        item['Qty'] = quMatch[1];
-        item['Unit'] = quMatch[2].toUpperCase();
+      const descParts = [];
+
+      for (let j = 1; j < items.length; j++) {
+        const it = items[j];
+        const str = it.str.trim();
+        if (!str) continue;
+
+        const numStr = str.replace(/,/g, '');
+
+        if (IS_NUM.test(numStr)) {
+          // Numeric value — assign by column X proximity
+          const col = closestNumericCol(it.x);
+          if (col) item[col] = numStr;
+          // If no column map yet, don't guess — skip the orphan number
+        } else if (UNIT_CODE.test(str)) {
+          item['Unit'] = str.toUpperCase();
+        } else {
+          // Text — only keep if left of the numeric columns (description zone)
+          if (descBoundaryX == null || it.x < descBoundaryX) {
+            descParts.push(str);
+          }
+          // Text to the right of descBoundary on the first line is likely a
+          // percentage or annotation we don't map — ignore it.
+        }
       }
 
-      // Extract unit cost
-      const ucMatch = rest.match(UNIT_COST_RE);
-      if (ucMatch) item['Unit Cost'] = ucMatch[1].replace(/,/g, '');
-
-      // Extract activity
-      const actMatch = rest.match(ACTIVITY_RE);
-      if (actMatch) {
-        const a = actMatch[1];
-        item['Activity'] = (a === 'R&R') ? 'Remove and Replace' : a;
-      }
-
-      // Extract CAT/SEL codes
-      const csMatch = rest.match(CAT_SEL_RE);
-      if (csMatch && csMatch[1] !== csMatch[2]) {
-        item['Cat'] = csMatch[1];
-        item['Sel'] = csMatch[2];
-      }
-
-      // Extract money values
-      const rcvM = rest.match(RCV_RE);
-      if (rcvM) item['RCV'] = rcvM[1].replace(/,/g, '');
-
-      const depM = rest.match(DEPRECIATION_RE);
-      if (depM) item['Depreciation Amount'] = depM[1].replace(/,/g, '');
-
-      const acvM = rest.match(ACV_RE);
-      if (acvM) item['ACV'] = acvM[1].replace(/,/g, '');
-
-      const taxM = rest.match(TAX_RE);
-      if (taxM) item['Sales Tax'] = taxM[1].replace(/,/g, '');
-
-      // Description: everything before qty/unit or codes
-      let desc = rest;
-      if (quMatch) desc = desc.replace(quMatch[0], '').trim();
-      if (actMatch) desc = desc.replace(actMatch[0], '').trim();
-      desc = desc.replace(/\$[\d,\.]+/g, '').replace(CAT_SEL_RE, '').trim();
-      desc = desc.replace(/\s{2,}/g, ' ').trim();
-      item['Desc'] = desc;
-
+      item['Desc'] = descParts.join(' ').trim();
       pendingItem = item;
       continue;
     }
 
-    // Check for continuation of previous line item (note or extra data)
-    if (pendingItem && !SKIP_LINES.test(text)) {
-      // If the line doesn't look like a header, treat as Note 1
-      if (!/^\d+\./.test(text) && text.length > 3) {
-        // Try to extract more fields from continuation
-        const depM = text.match(DEPRECIATION_RE);
-        if (depM && !pendingItem['Depreciation Amount'])
-          pendingItem['Depreciation Amount'] = depM[1].replace(/,/g, '');
-
-        const rcvM = text.match(RCV_RE);
-        if (rcvM && !pendingItem['RCV'])
-          pendingItem['RCV'] = rcvM[1].replace(/,/g, '');
-
-        const acvM = text.match(ACV_RE);
-        if (acvM && !pendingItem['ACV'])
-          pendingItem['ACV'] = acvM[1].replace(/,/g, '');
-
-        const taxM = text.match(TAX_RE);
-        if (taxM && !pendingItem['Sales Tax'])
-          pendingItem['Sales Tax'] = taxM[1].replace(/,/g, '');
-
-        const ucM = text.match(UNIT_COST_RE);
-        if (ucM && !pendingItem['Unit Cost'])
-          pendingItem['Unit Cost'] = ucM[1].replace(/,/g, '');
-
-        const quMatch = text.match(QTY_UNIT_RE);
-        if (quMatch && !pendingItem['Qty']) {
-          pendingItem['Qty'] = quMatch[1];
-          pendingItem['Unit'] = quMatch[2].toUpperCase();
-        }
-
-        const csMatch = text.match(CAT_SEL_RE);
-        if (csMatch && !pendingItem['Cat']) {
-          pendingItem['Cat'] = csMatch[1];
-          pendingItem['Sel'] = csMatch[2];
-        }
-
-        // If none of the above matched and it's descriptive text, append to Note 1
-        if (!depM && !rcvM && !acvM && !taxM && !ucM && !quMatch && !csMatch) {
-          if (!pendingItem['Note 1']) pendingItem['Note 1'] = text;
-        }
-      } else {
-        flushPending();
+    // ── Continuation lines (second/third row of same line item) ──────────
+    if (pendingItem) {
+      // Sub-category headers like "Insulation:" or "Flooring:" — skip, don't put in Note 1
+      if (/^[A-Za-z][A-Za-z0-9 \/\-']*:\s*$/.test(text)) {
+        // flush pending so this doesn't accidentally get attached as a note
+        // but DON'T reset the group — these are sub-labels within a section
+        continue;
       }
+
+      // Pure number / money lines (subtotals between items) — flush and skip
+      if (/^[\d\s$,.()\-]+$/.test(text)) {
+        flushPending();
+        continue;
+      }
+
+      // Activity keyword line (e.g. "Remove and Replace")
+      const actMatch = text.match(ACTIVITY_RE);
+      if (actMatch) {
+        const a = actMatch[1];
+        pendingItem['Activity'] = (a === 'R&R' || a === 'D&R') ? 'Remove and Replace' : a;
+      }
+
+      // CAT + SEL codes (e.g. "FLR CRP" on its own line or embedded)
+      const csMatch = text.match(CAT_SEL_RE);
+      if (csMatch) {
+        pendingItem['Cat'] = csMatch[1];
+        pendingItem['Sel'] = csMatch[2];
+      }
+
+      // If this continuation line has numeric columns at known X positions, pull them
+      // (handles the case where pricing wraps to a second PDF line)
+      if (!actMatch && !csMatch) {
+        let gotNumber = false;
+        for (const it of items) {
+          const numStr = it.str.trim().replace(/,/g, '');
+          if (IS_NUM.test(numStr)) {
+            const col = closestNumericCol(it.x);
+            if (col && !pendingItem[col]) { pendingItem[col] = numStr; gotNumber = true; }
+          }
+        }
+
+        // Pure descriptive text continuation — only keep if it looks like a genuine note
+        // (longer phrase, not a known header, not a unit code)
+        if (!gotNumber) {
+          const looksLikeNote = text.length > 8 && !SKIP_RE.test(text) && !UNIT_CODE.test(text);
+          if (looksLikeNote && !pendingItem['Note 1']) {
+            pendingItem['Note 1'] = text;
+          }
+        }
+      }
+
       continue;
     }
 
     flushPending();
 
-    // Check for room/section header
-    if (isRoomHeader(line, lines[i+1])) {
-      const t = text;
-      // Split on dash for "ROOM - Description" format
-      const dashIdx = t.search(/\s*[-–]\s*/);
+    // ── Room / section group header ─────────────────────────────────────
+    if (text.endsWith(':')) continue;           // sub-category label, not a group
+    if (/^[\d\s$,.()\-]+$/.test(text)) continue; // pure numbers
+    if (SKIP_RE.test(text)) continue;
+
+    const words = text.split(/\s+/);
+    if (words.length >= 1 && words.length <= 8 && /[A-Za-z]/.test(text) && !text.includes('$')) {
+      const dashIdx = text.search(/\s*[-–]\s*/);
       if (dashIdx > -1) {
-        currentGroup = makeGroupCode(t.slice(0, dashIdx).trim());
-        currentGroupDesc = t.slice(dashIdx).replace(/^[-–\s]+/, '').trim();
+        currentGroup = makeGroupCode(text.slice(0, dashIdx).trim());
+        currentGroupDesc = text.slice(dashIdx).replace(/^[-–\s]+/, '').trim();
       } else {
-        currentGroup = makeGroupCode(t);
-        currentGroupDesc = t;
+        currentGroup = makeGroupCode(text);
+        currentGroupDesc = text;
       }
     }
   }
 
   flushPending();
 
-  // Build final rows in column order
   return rows.map(item => {
     const row = {};
     for (const col of COLUMNS) row[col] = item[col] || '';
