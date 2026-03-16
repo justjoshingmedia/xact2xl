@@ -642,7 +642,10 @@ async function parseXactimatePDF(arrayBuffer) {
     }
   }
 
-  return results;
+  // Filter out sketch measurement rows (no pricing data) and renumber
+  const filtered = results.filter(r => r['Qty'] || r['Unit Cost'] || r['RCV']);
+  filtered.forEach((r, i) => { r['#'] = String(i + 1); });
+  return filtered;
 }
 
 // ─── Excel generation ─────────────────────────────────────────────────────────
