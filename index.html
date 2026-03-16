@@ -443,7 +443,7 @@ async function parseXactimatePDF(arrayBuffer) {
     unit_price: [271, 330],
     tax:        [331, 375],
     oap:        [376, 426],
-    rcv:        [420, 490],
+    rcv:        [426, 490],
     deprec:     [490, 540],
     acv:        [537, 620],
   };
@@ -470,7 +470,7 @@ async function parseXactimatePDF(arrayBuffer) {
   }
 
   function parseQtyUnit(text) {
-    const m = text.match(/^([\d,]+\.?\d*)\s*(SF|LF|EA|SY|HR|MO|CF|LS|SQ|GL|LB|PR|BX|CS|CY|TN|DA|CAL|GAL|BF|MBF)$/i);
+    const m = text.match(/^([\d,]+\.?\d*)\s*(SF|LF|EA|SY|HR|MO|CF|LS|SQ|GL|LB|PR|BX|CS|CY|TN|DA|CAL|GAL|BF|MBF|WK|WKS|DAY|DY)$/i);
     if (m) return { qty: cleanNum(m[1]), unit: m[2].toUpperCase() };
     return null;
   }
@@ -589,9 +589,9 @@ async function parseXactimatePDF(arrayBuffer) {
           lw.some(w => w.text.endsWith(':'))) continue;
 
       if (isLineItem) {
-        // Description is everything after "N. " in the first token, plus any x0<196 continuation words
+        // Description is everything after "N. " in the first token, plus any x0<200 continuation words
         const descFromFirst = first.replace(/^\d+\.\s*/, '');
-        const descWords = lw.filter(w => w.x0 < 196 && w !== lw[0]);
+        const descWords = lw.filter(w => w.x0 < 200 && w !== lw[0]);
         const desc = (descFromFirst + ' ' + descWords.map(w => w.text).join(' ')).trim();
 
         let qty = '', unit = '', unitPrice = '', tax = '', oap = '', rcv = '', deprec = '', acv = '';
@@ -630,7 +630,7 @@ async function parseXactimatePDF(arrayBuffer) {
         results.push(row);
 
       } else if (pendingIdx !== null) {
-        const contText = lw.filter(w => w.x0 < 196).map(w => w.text).join(' ').trim();
+        const contText = lw.filter(w => w.x0 < 200).map(w => w.text).join(' ').trim();
         if (!contText) continue;
         if (contText.startsWith('*')) {
           results[pendingIdx]['Note 1'] = contText.replace(/\*/g, '').trim();
