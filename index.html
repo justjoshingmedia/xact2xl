@@ -488,7 +488,7 @@ async function parseXactimatePDF(arrayBuffer) {
   let currentRoom = 'General';
   let currentRoomCode = 'GENERAL';
 
-  for (let pageNum = 2; pageNum <= pdf.numPages; pageNum++) {
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
     const viewport = page.getViewport({ scale: 1.0 });
     const textContent = await page.getTextContent({ includeMarkedContent: false });
@@ -566,7 +566,9 @@ async function parseXactimatePDF(arrayBuffer) {
       if (/^\s*(Totals?|Total):/.test(lineText)) { pendingIdx = null; continue; }
 
       const first = lw[0]?.text || '';
-      const isLineItem = /^\d+\.$/.test(first);
+      // Match "1." as one token, OR bare "1" when next token is "." or x0 is at far left margin
+      const isLineItem = /^\d+\.$/.test(first) ||
+        (/^\d+$/.test(first) && lw[0].x0 < 30);
 
       if (!isLineItem && lw[0]?.x0 < 50 && lw.length <= 5 &&
           !lw.some(w => isNumVal(w.text)) &&
