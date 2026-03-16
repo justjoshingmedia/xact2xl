@@ -443,9 +443,9 @@ async function parseXactimatePDF(arrayBuffer) {
     unit_price: [271, 330],
     tax:        [331, 375],
     oap:        [376, 426],
-    rcv:        [426, 490],
-    deprec:     [490, 540],
-    acv:        [540, 620],
+    rcv:        [427, 480],
+    deprec:     [481, 540],
+    acv:        [541, 620],
   };
 
   const COLUMNS = [
@@ -533,7 +533,7 @@ async function parseXactimatePDF(arrayBuffer) {
     if (!contMatch && colHeaderTop) {
       const titleWords = words.filter(w =>
         w.top > 100 && w.top < colHeaderTop &&
-        w.x0 > 130 && w.x0 < 450 &&
+        w.x0 >= 100 && w.x0 < 500 &&
         !['Height:', 'SF', 'LF', 'SY', 'YA', 'Group'].some(s => w.text.includes(s))
       );
       const titleLineMap = {};
@@ -547,7 +547,7 @@ async function parseXactimatePDF(arrayBuffer) {
         const candidate = lw.map(w => w.text).join(' ').trim();
         if (candidate && !/\d/.test(candidate) &&
             candidate.split(' ').length >= 1 &&
-            candidate.split(' ').length <= 5 &&
+            candidate.split(' ').length <= 4 &&
             !candidate.startsWith('***')) {
           currentRoom = candidate;
           currentRoomCode = candidate.toUpperCase().replace(/[^A-Z0-9]/g, '_');
@@ -574,7 +574,7 @@ async function parseXactimatePDF(arrayBuffer) {
       const lineText = lw.map(w => w.text).join(' ');
 
       if (SKIP_PHRASES.some(s => lineText.includes(s))) continue;
-      if (/^\s*(Totals?|Total):/.test(lineText)) { pendingIdx = null; continue; }
+      if (/^\s*(Totals?|Total):/.test(lineText) || lineText.includes('Line Item Totals')) { pendingIdx = null; continue; }
 
       const first = lw[0]?.text || '';
       // Line items are a single token: "1. Description text..."
