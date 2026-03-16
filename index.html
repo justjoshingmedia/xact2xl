@@ -445,7 +445,7 @@ async function parseXactimatePDF(arrayBuffer) {
     oap:        [376, 426],
     rcv:        [426, 490],
     deprec:     [490, 540],
-    acv:        [537, 620],
+    acv:        [540, 620],
   };
 
   const COLUMNS = [
@@ -630,6 +630,24 @@ async function parseXactimatePDF(arrayBuffer) {
         results.push(row);
 
       } else if (pendingIdx !== null) {
+        // Pick up numeric column values first — some PDFs place all pricing
+        // on the continuation (wrapped) line rather than the first line.
+        const pr = results[pendingIdx];
+        for (const w of lw) {
+          const col = getCol(w.x0);
+          if (col === 'qty') {
+            const qu = parseQtyUnit(w.text);
+            if (qu && !pr['Qty']) { pr['Qty'] = qu.qty; pr['Unit'] = qu.unit; }
+          } else if (col && isNumVal(w.text)) {
+            const n = cleanNum(w.text);
+            if      (col === 'unit_price' && !pr['Unit Cost'])           pr['Unit Cost'] = n;
+            else if (col === 'tax'        && !pr['Sales Tax'])           pr['Sales Tax'] = n;
+            else if (col === 'oap'        && !pr['O&P'])                 pr['O&P'] = n;
+            else if (col === 'rcv'        && !pr['RCV'])                 pr['RCV'] = n;
+            else if (col === 'deprec'     && !pr['Depreciation Amount']) pr['Depreciation Amount'] = n;
+            else if (col === 'acv'        && !pr['ACV'])                 pr['ACV'] = n;
+          }
+        }
         const contText = lw.filter(w => w.x0 < 200).map(w => w.text).join(' ').trim();
         if (!contText) continue;
         if (contText.startsWith('*')) {
@@ -643,7 +661,7 @@ async function parseXactimatePDF(arrayBuffer) {
   }
 
   // Filter out sketch measurement rows (no pricing data) and renumber
-  const filtered = results.filter(r => r['Qty'] || r['Unit Cost'] || r['RCV']);
+  const filtered = results.filter(r => r['Qty'] || r['Unit Cost'] || r['RCV'] || r['O&P']);
   filtered.forEach((r, i) => { r['#'] = String(i + 1); });
   return filtered;
 }
