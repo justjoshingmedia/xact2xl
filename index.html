@@ -588,7 +588,8 @@ async function parseXactimatePDF(arrayBuffer) {
       const descStart = first.replace(/^\d+\.\s*/, '') || (lw[1]?.text || '');
       const isLineItem = lineNumMatch !== null &&
         !/^\s*(SF|LF|SY|CY|SQ|EA)\b/i.test(descStart) &&
-        !/^\d+$/.test(descStart.trim()); // e.g. "0.33" → descStart="33" → not a line item
+        !/^\d+$/.test(descStart.trim()) && // e.g. "0.33" → descStart="33" → not a line item
+        /^[A-Za-z]/i.test(descStart.trim()); // e.g. "15 % waste" → descStart="% waste..." → not a line item
 
       if (!isLineItem && lw[0]?.x0 < 50 && lw.length <= 5 &&
           !lw.some(w => isNumVal(w.text)) &&
@@ -647,7 +648,7 @@ async function parseXactimatePDF(arrayBuffer) {
           const col = getCol(w.x0);
           if (col === 'qty') {
             const qu = parseQtyUnit(w.text);
-            if (qu && !pr['Qty']) {
+            if (qu) {
               const parsedQty = parseFloat(qu.qty);
               pr['Qty'] = isNaN(parsedQty) ? '' : parsedQty;
               pr['Unit'] = qu.unit;
@@ -670,9 +671,11 @@ async function parseXactimatePDF(arrayBuffer) {
         }
         const contText = lw.filter(w => w.x0 < 200).map(w => w.text).join(' ').trim();
         if (!contText) continue;
-        if (contText.startsWith('*')) {
-          results[pendingIdx]['Note 1'] = contText.replace(/\*/g, '').trim();
-          pendingIdx = null;
+        if (contText.startsWith('*') || /\d+\s*%\s*waste/i.test(contText)) {
+          if (!results[pendingIdx]['Note 1']) {
+            results[pendingIdx]['Note 1'] = contText.replace(/\*/g, '').trim();
+          }
+          // keep pendingIdx active — more continuation data may follow
         } else {
           results[pendingIdx]['Desc'] += ' ' + contText;
         }
