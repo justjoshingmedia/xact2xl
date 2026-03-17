@@ -573,6 +573,8 @@ async function parseXactimatePDF(arrayBuffer) {
     let pendingIdx = null;
 
     for (const topKey of Object.keys(lineMap).sort((a, b) => a - b)) {
+      // Skip anything at or above the DESCRIPTION column header (sketch diagrams, room measurements, page headers)
+      if (colHeaderTop !== null && Number(topKey) <= colHeaderTop) continue;
       const lw = lineMap[topKey].sort((a, b) => a.x0 - b.x0);
       const lineText = lw.map(w => w.text).join(' ');
 
@@ -604,7 +606,8 @@ async function parseXactimatePDF(arrayBuffer) {
           if (col === 'qty') {
             const qu = parseQtyUnit(w.text);
             if (qu) { qty = qu.qty; unit = qu.unit; }
-            else if (isNumVal(w.text) && !unitPrice) { unitPrice = cleanNum(w.text); }
+            // No fallback here: a bare number in the qty range IS the quantity, not the unit price.
+            // (The continuation handler has a fallback for the rare case where unit price lands in the qty column.)
           } else if (col && isNumVal(w.text)) {
             const n = cleanNum(w.text);
             const isNeg = w.text.startsWith('(');
