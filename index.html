@@ -440,12 +440,12 @@ async function parseXactimatePDF(arrayBuffer) {
 
   const COLS = {
     qty:        [196, 270],
-    unit_price: [271, 330],
-    tax:        [331, 375],
-    oap:        [376, 426],
-    rcv:        [427, 480],
-    deprec:     [481, 540],
-    acv:        [541, 620],
+    unit_price: [271, 335],
+    tax:        [336, 380],
+    oap:        [381, 430],
+    rcv:        [431, 492],
+    deprec:     [493, 545],
+    acv:        [546, 620],
   };
 
   const COLUMNS = [
@@ -466,7 +466,10 @@ async function parseXactimatePDF(arrayBuffer) {
   }
 
   function isNumVal(s) {
-    return !isNaN(parseFloat(cleanNum(s))) && isFinite(cleanNum(s));
+    if (s === null || s === undefined) return false;
+    const c = s.replace(/,/g, '').replace(/[()]/g, '').trim();
+    if (c === '') return false;
+    return !isNaN(parseFloat(c));
   }
 
   function parseQtyUnit(text) {
@@ -623,14 +626,14 @@ async function parseXactimatePDF(arrayBuffer) {
         row['Group Code'] = currentRoomCode;
         row['Group Description'] = currentRoom;
         row['Desc'] = desc;
-        row['Qty'] = qty;
+        row['Qty'] = qty ? parseFloat(qty) : '';
         row['Unit'] = unit;
-        row['Unit Cost'] = unitPrice;
-        row['O&P'] = oap;
-        row['Sales Tax'] = tax;
-        row['RCV'] = rcv;
-        row['Depreciation Amount'] = deprec;
-        row['ACV'] = acv;
+        row['Unit Cost'] = unitPrice ? parseFloat(unitPrice) : '';
+        row['O&P'] = oap ? parseFloat(oap) : '';
+        row['Sales Tax'] = tax ? parseFloat(tax) : '';
+        row['RCV'] = rcv ? parseFloat(rcv) : '';
+        row['Depreciation Amount'] = deprec ? parseFloat(deprec) : '';
+        row['ACV'] = acv ? parseFloat(acv) : '';
         results.push(row);
 
       } else if (pendingIdx !== null) {
@@ -641,10 +644,10 @@ async function parseXactimatePDF(arrayBuffer) {
           const col = getCol(w.x0);
           if (col === 'qty') {
             const qu = parseQtyUnit(w.text);
-            if (qu && !pr['Qty']) { pr['Qty'] = qu.qty; pr['Unit'] = qu.unit; }
-            else if (!qu && isNumVal(w.text) && !pr['Unit Cost']) { pr['Unit Cost'] = cleanNum(w.text); }
+            if (qu && !pr['Qty']) { pr['Qty'] = parseFloat(qu.qty) || ''; pr['Unit'] = qu.unit; }
+            else if (!qu && isNumVal(w.text) && !pr['Unit Cost']) { pr['Unit Cost'] = parseFloat(cleanNum(w.text)) || ''; }
           } else if (col && isNumVal(w.text)) {
-            const n = cleanNum(w.text);
+            const n = parseFloat(cleanNum(w.text)) || '';
             const isNeg = w.text.startsWith('(');
             if (isNeg) {
               if (!pr['Depreciation Amount']) pr['Depreciation Amount'] = n;
@@ -705,6 +708,27 @@ function buildExcel(rows, filename) {
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Totals row with Excel SUM formulas
+  const TOTALS_COLS = new Set(['Qty','Unit Cost','Sales Tax','RCV','Depreciation Amount','ACV']);
+  const dataRowCount = rows.length;
+  const totalsR = dataRowCount + 1; // 0-indexed: header=0, data=1..dataRowCount, totals row after
+  ws[XLSX.utils.encode_cell({ r: totalsR, c: 0 })] = { t: 's', v: 'Total' };
+  COLUMNS.forEach((col, ci) => {
+    if (!TOTALS_COLS.has(col)) return;
+    const letter = XLSX.utils.encode_col(ci);
+    ws[XLSX.utils.encode_cell({ r: totalsR, c: ci })] = {
+      t: 'n', f: `SUM(${letter}2:${letter}${dataRowCount + 1})`
+    };
+  });
+  const fullRange = XLSX.utils.decode_range(ws['!ref']);
+  fullRange.e.r = totalsR;
+  ws['!ref'] = XLSX.utils.encode_range(fullRange);
+
+  // Autofilter on the header row (Excel Table-style)
+  ws['!autofilter'] = {
+    ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: COLUMNS.length - 1 } })
+  };
 
   // Column widths
   ws['!cols'] = COLUMNS.map(c => ({ wch: Math.max(c.length + 2, 12) }));
