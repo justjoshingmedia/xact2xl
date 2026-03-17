@@ -545,16 +545,35 @@ async function parseXactimatePDF(arrayBuffer) {
         if (!titleLineMap[key]) titleLineMap[key] = [];
         titleLineMap[key].push(w);
       }
-      for (const key of Object.keys(titleLineMap).sort((a, b) => a - b)) {
+      // Pick the title CLOSEST to the column header (highest top value that's still above it)
+      // This ensures "Kitchen" wins over "Main Level" when both appear on the page
+      const sortedKeys = Object.keys(titleLineMap).map(Number).sort((a, b) => b - a); // descending = closest to header first
+      for (const key of sortedKeys) {
         const lw = titleLineMap[key].sort((a, b) => a.x0 - b.x0);
         const candidate = lw.map(w => w.text).join(' ').trim();
         if (candidate && !/\d/.test(candidate) &&
             candidate.split(' ').length >= 1 &&
             candidate.split(' ').length <= 4 &&
-            !candidate.startsWith('***')) {
+            !candidate.startsWith('***') &&
+            !['Main Level','Level 2','Level 3','Roof','Exterior','Interior','General Conditions','M. E. P.'].includes(candidate)) {
           currentRoom = candidate;
           currentRoomCode = candidate.toUpperCase().replace(/[^A-Z0-9]/g, '_');
           break;
+        }
+      }
+      // If no specific room found, fall back to any valid title (including level names)
+      if (currentRoom === 'General' || currentRoom === currentRoomCode) {
+        for (const key of sortedKeys) {
+          const lw = titleLineMap[key].sort((a, b) => a.x0 - b.x0);
+          const candidate = lw.map(w => w.text).join(' ').trim();
+          if (candidate && !/\d/.test(candidate) &&
+              candidate.split(' ').length >= 1 &&
+              candidate.split(' ').length <= 4 &&
+              !candidate.startsWith('***')) {
+            currentRoom = candidate;
+            currentRoomCode = candidate.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+            break;
+          }
         }
       }
     }
@@ -613,13 +632,13 @@ async function parseXactimatePDF(arrayBuffer) {
             const n = cleanNum(w.text);
             const isNeg = w.text.startsWith('(');
             if (isNeg) {
-              if (!deprec) deprec = n;
-            } else if (col === 'unit_price' && !unitPrice) unitPrice = n;
-            else if (col === 'tax'          && !tax)       tax = n;
-            else if (col === 'oap'          && !oap)       oap = n;
-            else if (col === 'rcv'          && !rcv)       rcv = n;
-            else if (col === 'deprec'       && !deprec)    deprec = n;
-            else if (col === 'acv'          && !acv)       acv = n;
+              if (deprec === '') deprec = n;
+            } else if (col === 'unit_price' && unitPrice === '') unitPrice = n;
+            else if (col === 'tax'          && tax === '')       tax = n;
+            else if (col === 'oap'          && oap === '')       oap = n;
+            else if (col === 'rcv'          && rcv === '')       rcv = n;
+            else if (col === 'deprec'       && deprec === '')    deprec = n;
+            else if (col === 'acv'          && acv === '')       acv = n;
           }
         }
 
@@ -630,14 +649,14 @@ async function parseXactimatePDF(arrayBuffer) {
         row['Group Code'] = currentRoomCode;
         row['Group Description'] = currentRoom;
         row['Desc'] = desc;
-        row['Qty'] = qty ? parseFloat(qty) : '';
+        row['Qty'] = qty !== '' ? parseFloat(qty) : '';
         row['Unit'] = unit;
-        row['Unit Cost'] = unitPrice ? parseFloat(unitPrice) : '';
-        row['O&P'] = oap ? parseFloat(oap) : '';
-        row['Sales Tax'] = tax ? parseFloat(tax) : '';
-        row['RCV'] = rcv ? parseFloat(rcv) : '';
-        row['Depreciation Amount'] = deprec ? parseFloat(deprec) : '';
-        row['ACV'] = acv ? parseFloat(acv) : '';
+        row['Unit Cost'] = unitPrice !== '' ? parseFloat(unitPrice) : '';
+        row['O&P'] = oap !== '' ? parseFloat(oap) : '';
+        row['Sales Tax'] = tax !== '' ? parseFloat(tax) : '';
+        row['RCV'] = rcv !== '' ? parseFloat(rcv) : '';
+        row['Depreciation Amount'] = deprec !== '' ? parseFloat(deprec) : '';
+        row['ACV'] = acv !== '' ? parseFloat(acv) : '';
         results.push(row);
 
       } else if (pendingIdx !== null) {
@@ -648,20 +667,20 @@ async function parseXactimatePDF(arrayBuffer) {
           const col = getCol(w.x0);
           if (col === 'qty') {
             const qu = parseQtyUnit(w.text);
-            if (qu && !pr['Qty']) { pr['Qty'] = parseFloat(qu.qty) || ''; pr['Unit'] = qu.unit; }
-            else if (!qu && isNumVal(w.text) && !pr['Unit Cost']) { pr['Unit Cost'] = parseFloat(cleanNum(w.text)) || ''; }
+            if (qu && pr['Qty'] === '') { pr['Qty'] = parseFloat(qu.qty); pr['Unit'] = qu.unit; }
+            else if (!qu && isNumVal(w.text) && pr['Unit Cost'] === '') { pr['Unit Cost'] = parseFloat(cleanNum(w.text)); }
           } else if (col && isNumVal(w.text)) {
             const n = parseFloat(cleanNum(w.text)) || '';
             const isNeg = w.text.startsWith('(');
             if (isNeg) {
-              if (!pr['Depreciation Amount']) pr['Depreciation Amount'] = n;
+              if (pr['Depreciation Amount'] === '') pr['Depreciation Amount'] = n;
             } else {
-              if      (col === 'unit_price' && !pr['Unit Cost'])           pr['Unit Cost'] = n;
-              else if (col === 'tax'        && !pr['Sales Tax'])           pr['Sales Tax'] = n;
-              else if (col === 'oap'        && !pr['O&P'])                 pr['O&P'] = n;
-              else if (col === 'rcv'        && !pr['RCV'])                 pr['RCV'] = n;
-              else if (col === 'deprec'     && !pr['Depreciation Amount']) pr['Depreciation Amount'] = n;
-              else if (col === 'acv'        && !pr['ACV'])                 pr['ACV'] = n;
+              if      (col === 'unit_price' && pr['Unit Cost'] === '')           pr['Unit Cost'] = n;
+              else if (col === 'tax'        && pr['Sales Tax'] === '')           pr['Sales Tax'] = n;
+              else if (col === 'oap'        && pr['O&P'] === '')                 pr['O&P'] = n;
+              else if (col === 'rcv'        && pr['RCV'] === '')                 pr['RCV'] = n;
+              else if (col === 'deprec'     && pr['Depreciation Amount'] === '') pr['Depreciation Amount'] = n;
+              else if (col === 'acv'        && pr['ACV'] === '')                 pr['ACV'] = n;
             }
           }
         }
@@ -677,8 +696,8 @@ async function parseXactimatePDF(arrayBuffer) {
     }
   }
 
-  // Filter out sketch measurement rows (no pricing data) and renumber
-  const filtered = results.filter(r => r['Qty'] || r['Unit Cost'] || r['RCV'] || r['O&P']);
+  // Filter out sketch measurement rows (no pricing data at all) and renumber
+  const filtered = results.filter(r => r['Qty'] !== '' || r['Unit Cost'] !== '' || r['RCV'] !== '' || r['O&P'] !== '');
   filtered.forEach((r, i) => { r['#'] = String(i + 1); });
   return filtered;
 }
@@ -704,7 +723,7 @@ function buildExcel(rows, filename) {
   for (const row of rows) {
     wsData.push(COLUMNS.map(c => {
       const v = row[c];
-      if (!v && v !== 0) return '';
+      if (v === '' || v == null) return '';
       if (NUMERIC_COLS.has(c)) { const n = parseFloat(v); return isNaN(n) ? v : n; }
       return v;
     }));
