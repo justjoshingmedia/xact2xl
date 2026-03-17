@@ -473,7 +473,7 @@ async function parseXactimatePDF(arrayBuffer) {
   }
 
   function parseQtyUnit(text) {
-    const m = text.match(/^([\d,]+\.?\d*)\s*(SF|LF|EA|SY|HR|MO|CF|LS|SQ|GL|LB|PR|BX|CS|CY|TN|DA|CAL|GAL|BF|MBF|WK|WKS|DAY|DY)$/i);
+    const m = text.match(/^([\d,]+\.?\d*)\s*(SF|LF|EA|SY|HR|MO|CF|LS|SQ|GL|LB|PR|BX|CS|CY|TN|DA|CAL|GAL|BF|MBF|WK|WKS|DAY|DY|RL|PC|FT|IN|VLF|CLF|SET|JOB|UNIT)$/i);
     if (m) return { qty: cleanNum(m[1]), unit: m[2].toUpperCase() };
     return null;
   }
@@ -578,7 +578,7 @@ async function parseXactimatePDF(arrayBuffer) {
       const lw = lineMap[topKey].sort((a, b) => a.x0 - b.x0);
       const lineText = lw.map(w => w.text).join(' ');
 
-      if (SKIP_PHRASES.some(s => lineText.includes(s))) continue;
+      if (SKIP_PHRASES.some(s => lineText.includes(s))) { pendingIdx = null; continue; }
       if (/^\s*(Totals?|Total):/.test(lineText) || lineText.includes('Line Item Totals')) { pendingIdx = null; continue; }
 
       const first = lw[0]?.text || '';
@@ -612,14 +612,13 @@ async function parseXactimatePDF(arrayBuffer) {
           } else if (col && isNumVal(w.text)) {
             const n = cleanNum(w.text);
             const isNeg = w.text.startsWith('(');
-            if (isNeg) {
-              if (!deprec) deprec = n;
-            } else if (col === 'unit_price' && !unitPrice) unitPrice = n;
-            else if (col === 'tax'          && !tax)       tax = n;
-            else if (col === 'oap'          && !oap)       oap = n;
-            else if (col === 'rcv'          && !rcv)       rcv = n;
-            else if (col === 'deprec'       && !deprec)    deprec = n;
-            else if (col === 'acv'          && !acv)       acv = n;
+            if      (col === 'unit_price' && !unitPrice) unitPrice = n;
+            else if (col === 'tax'        && !tax)       tax = n;
+            else if (col === 'oap'        && !oap)       oap = n;
+            else if (col === 'rcv'        && !rcv)       rcv = n;
+            else if (col === 'deprec'     && !deprec)    deprec = n;
+            else if (col === 'acv'        && !acv)       acv = n;
+            else if (isNeg               && !deprec)     deprec = n; // fallback: parenthesized value = depreciation
           }
         }
 
@@ -648,21 +647,25 @@ async function parseXactimatePDF(arrayBuffer) {
           const col = getCol(w.x0);
           if (col === 'qty') {
             const qu = parseQtyUnit(w.text);
-            if (qu && !pr['Qty']) { pr['Qty'] = parseFloat(qu.qty) || ''; pr['Unit'] = qu.unit; }
-            else if (!qu && isNumVal(w.text) && !pr['Unit Cost']) { pr['Unit Cost'] = parseFloat(cleanNum(w.text)) || ''; }
-          } else if (col && isNumVal(w.text)) {
-            const n = parseFloat(cleanNum(w.text)) || '';
-            const isNeg = w.text.startsWith('(');
-            if (isNeg) {
-              if (!pr['Depreciation Amount']) pr['Depreciation Amount'] = n;
-            } else {
-              if      (col === 'unit_price' && !pr['Unit Cost'])           pr['Unit Cost'] = n;
-              else if (col === 'tax'        && !pr['Sales Tax'])           pr['Sales Tax'] = n;
-              else if (col === 'oap'        && !pr['O&P'])                 pr['O&P'] = n;
-              else if (col === 'rcv'        && !pr['RCV'])                 pr['RCV'] = n;
-              else if (col === 'deprec'     && !pr['Depreciation Amount']) pr['Depreciation Amount'] = n;
-              else if (col === 'acv'        && !pr['ACV'])                 pr['ACV'] = n;
+            if (qu && !pr['Qty']) {
+              const parsedQty = parseFloat(qu.qty);
+              pr['Qty'] = isNaN(parsedQty) ? '' : parsedQty;
+              pr['Unit'] = qu.unit;
+            } else if (!qu && isNumVal(w.text) && !pr['Unit Cost']) {
+              const parsedUC = parseFloat(cleanNum(w.text));
+              pr['Unit Cost'] = isNaN(parsedUC) ? '' : parsedUC;
             }
+          } else if (col && isNumVal(w.text)) {
+            const raw = parseFloat(cleanNum(w.text));
+            const n = isNaN(raw) ? '' : raw;
+            const isNeg = w.text.startsWith('(');
+            if      (col === 'unit_price' && !pr['Unit Cost'])           pr['Unit Cost'] = n;
+            else if (col === 'tax'        && !pr['Sales Tax'])           pr['Sales Tax'] = n;
+            else if (col === 'oap'        && !pr['O&P'])                 pr['O&P'] = n;
+            else if (col === 'rcv'        && !pr['RCV'])                 pr['RCV'] = n;
+            else if (col === 'deprec'     && !pr['Depreciation Amount']) pr['Depreciation Amount'] = n;
+            else if (col === 'acv'        && !pr['ACV'])                 pr['ACV'] = n;
+            else if (isNeg               && !pr['Depreciation Amount'])  pr['Depreciation Amount'] = n;
           }
         }
         const contText = lw.filter(w => w.x0 < 200).map(w => w.text).join(' ').trim();
