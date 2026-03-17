@@ -450,7 +450,7 @@ async function parseXactimatePDF(arrayBuffer) {
 
   const COLUMNS = [
     '#','Group Code','Group Description','Desc',
-    'Qty','Unit','Unit Cost','O&P','Sales Tax',
+    'Qty','Unit','Unit Cost','Sales Tax','O&P',
     'RCV','Depreciation Amount','ACV','Note 1'
   ];
 
@@ -587,7 +587,8 @@ async function parseXactimatePDF(arrayBuffer) {
       // Guard: sketch blocks emit "95." as lw[0] and "SF" as lw[1]; fall back to lw[1] when stripped text is empty
       const descStart = first.replace(/^\d+\.\s*/, '') || (lw[1]?.text || '');
       const isLineItem = lineNumMatch !== null &&
-        !/^\s*(SF|LF|SY|CY|SQ|EA)\b/i.test(descStart);
+        !/^\s*(SF|LF|SY|CY|SQ|EA)\b/i.test(descStart) &&
+        !/^\d+$/.test(descStart.trim()); // e.g. "0.33" → descStart="33" → not a line item
 
       if (!isLineItem && lw[0]?.x0 < 50 && lw.length <= 5 &&
           !lw.some(w => isNumVal(w.text)) &&
@@ -687,7 +688,7 @@ function buildExcel(rows, filename) {
   // Preferred column order — only columns with at least one non-empty value are included
   const COL_ORDER = [
     '#','Group Code','Group Description','Desc',
-    'Qty','Unit','Unit Cost','O&P','Sales Tax',
+    'Qty','Unit','Unit Cost','Sales Tax','O&P',
     'RCV','Depreciation Amount','ACV','Note 1'
   ];
   const seen = new Set();
@@ -713,7 +714,7 @@ function buildExcel(rows, filename) {
   const ws = XLSX.utils.aoa_to_sheet(wsData);
 
   // Totals row with Excel SUM formulas
-  const TOTALS_COLS = new Set(['Qty','Unit Cost','Sales Tax','RCV','Depreciation Amount','ACV']);
+  const TOTALS_COLS = new Set(['Qty','O&P','Sales Tax','RCV','Depreciation Amount','ACV']);
   const dataRowCount = rows.length;
   const totalsR = dataRowCount + 1; // 0-indexed: header=0, data=1..dataRowCount, totals row after
   ws[XLSX.utils.encode_cell({ r: totalsR, c: 0 })] = { t: 's', v: 'Total' };
