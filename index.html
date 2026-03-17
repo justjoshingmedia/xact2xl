@@ -9,7 +9,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
   :root {
     --navy: #0A1628;
     --teal: #00D4AA;
@@ -18,7 +17,6 @@
     --white: #ffffff;
     --white-55: rgba(255,255,255,0.55);
   }
-
   body {
     background: var(--navy);
     color: var(--white);
@@ -29,7 +27,6 @@
     align-items: center;
     overflow-x: hidden;
   }
-
   /* Grid texture */
   body::before {
     content: '';
@@ -42,7 +39,6 @@
     pointer-events: none;
     z-index: 0;
   }
-
   /* Ambient glow */
   body::after {
     content: '';
@@ -56,7 +52,6 @@
     pointer-events: none;
     z-index: 0;
   }
-
   .container {
     position: relative;
     z-index: 1;
@@ -68,10 +63,8 @@
     align-items: center;
     gap: 48px;
   }
-
   /* Header */
   header { text-align: center; display: flex; flex-direction: column; gap: 12px; }
-
   .logo {
     font-family: 'Syne', sans-serif;
     font-weight: 800;
@@ -80,7 +73,6 @@
     letter-spacing: 0;
   }
   .logo .teal { color: var(--teal); }
-
   .tagline {
     font-family: 'DM Sans', sans-serif;
     font-size: 0.75rem;
@@ -90,7 +82,6 @@
     color: var(--white-55);
   }
   .tagline .teal { color: var(--teal); }
-
   /* Upload zone */
   #upload-zone {
     width: 100%;
@@ -112,9 +103,7 @@
     box-shadow: 0 0 32px rgba(0,212,170,0.18);
     transform: translateY(-2px);
   }
-
   .upload-icon { color: var(--teal); opacity: 0.7; }
-
   .upload-title {
     font-family: 'DM Sans', sans-serif;
     font-size: 1.15rem;
@@ -127,7 +116,6 @@
     max-width: 440px;
     line-height: 1.6;
   }
-
   .btn {
     display: inline-flex;
     align-items: center;
@@ -145,9 +133,7 @@
   }
   .btn:hover { opacity: 0.88; transform: translateY(-1px); }
   .btn:active { transform: translateY(0); }
-
   #file-input { display: none; }
-
   /* Processing state */
   #processing-zone {
     display: none;
@@ -162,13 +148,11 @@
     gap: 24px;
     text-align: center;
   }
-
   .proc-filename {
     font-size: 0.85rem;
     color: var(--white-55);
     word-break: break-all;
   }
-
   .progress-bar-wrap {
     width: 100%;
     max-width: 400px;
@@ -184,7 +168,6 @@
     border-radius: 2px;
     transition: width 0.4s ease;
   }
-
   .steps {
     display: flex;
     gap: 24px;
@@ -207,7 +190,6 @@
     transition: background 0.3s;
   }
   .step.active .step-dot { background: var(--teal); box-shadow: 0 0 8px var(--teal); }
-
   /* Ready state */
   #ready-zone {
     display: none;
@@ -222,7 +204,6 @@
     gap: 20px;
     text-align: center;
   }
-
   .check-circle {
     width: 64px; height: 64px;
     border-radius: 50%;
@@ -231,25 +212,21 @@
     flex-shrink: 0;
   }
   .check-circle svg { color: var(--navy); }
-
   .ready-title {
     font-family: 'Syne', sans-serif;
     font-size: 1.4rem;
     font-weight: 800;
   }
-
   .ready-counts {
     font-size: 0.88rem;
     color: var(--white-55);
   }
   .ready-counts span { color: var(--teal); font-weight: 500; }
-
   .btn-download {
     font-size: 1rem;
     padding: 14px 32px;
     margin-top: 4px;
   }
-
   .convert-another {
     font-size: 0.85rem;
     color: var(--white-55);
@@ -261,7 +238,6 @@
     font-family: 'DM Sans', sans-serif;
   }
   .convert-another:hover { color: var(--white); }
-
   /* Footer */
   footer {
     position: relative;
@@ -273,7 +249,6 @@
     padding: 0 24px 48px;
     text-align: center;
   }
-
   .pills {
     display: flex;
     flex-wrap: wrap;
@@ -290,7 +265,6 @@
     background: var(--teal-bg);
     letter-spacing: 0.02em;
   }
-
   .privacy {
     font-size: 0.75rem;
     color: var(--white-55);
@@ -303,7 +277,6 @@
     color: var(--white-55);
     opacity: 0.5;
   }
-
   /* Error toast */
   #error-toast {
     display: none;
@@ -323,13 +296,11 @@
 </style>
 </head>
 <body>
-
 <div class="container">
   <header>
     <div class="logo"><span>Xact</span><span class="teal">2</span><span>XL</span></div>
     <div class="tagline">Xactimate PDF → <span class="teal">Excel</span> · Instantly</div>
   </header>
-
   <!-- Upload Zone -->
   <div id="upload-zone" role="button" tabindex="0" aria-label="Upload PDF">
     <svg class="upload-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -346,7 +317,6 @@
     </button>
     <input type="file" id="file-input" accept=".pdf,application/pdf">
   </div>
-
   <!-- Processing Zone -->
   <div id="processing-zone">
     <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -363,7 +333,6 @@
       <div class="step" id="step-3"><div class="step-dot"></div>Building Excel</div>
     </div>
   </div>
-
   <!-- Ready Zone -->
   <div id="ready-zone">
     <div class="check-circle">
@@ -380,7 +349,6 @@
     <button class="convert-another" id="convert-another-btn" type="button">Convert another estimate</button>
   </div>
 </div>
-
 <footer>
   <div class="pills">
     <div class="pill">Scope Only</div>
@@ -394,50 +362,40 @@
   </div>
   <div class="byline">by justjoshingmedia &copy; 2026</div>
 </footer>
-
 <div id="error-toast"></div>
-
 <!-- CDN Libraries -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
 <script>
 // ─── Config ─────────────────────────────────────────────────────────────────
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
 // ─── State ───────────────────────────────────────────────────────────────────
 let xlsxBlob = null;
 let outputFilename = 'Xact2XL.xlsx';
-
 // ─── UI helpers ──────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-
 function showZone(name) {
   ['upload-zone','processing-zone','ready-zone'].forEach(z => {
     const el = $(z);
     el.style.display = (z === name) ? 'flex' : 'none';
   });
 }
-
 function setProgress(pct, stepIdx) {
   $('progress-fill').style.width = pct + '%';
   ['step-1','step-2','step-3'].forEach((s, i) => {
     $(s).classList.toggle('active', i < stepIdx);
   });
 }
-
 function showError(msg) {
   const t = $('error-toast');
   t.textContent = msg;
   t.style.display = 'block';
   setTimeout(() => { t.style.display = 'none'; }, 5000);
 }
-
 // ─── PDF PARSING (isolated — update this function without touching UI) ────────
 async function parseXactimatePDF(arrayBuffer) {
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
   const COLS = {
     qty:        [196, 270],
     unit_price: [271, 335],
@@ -447,37 +405,31 @@ async function parseXactimatePDF(arrayBuffer) {
     deprec:     [493, 545],
     acv:        [546, 620],
   };
-
   const COLUMNS = [
     '#','Group Code','Group Description','Desc',
     'Qty','Unit','Unit Cost','Sales Tax','O&P',
     'RCV','Depreciation Amount','ACV','Note 1'
   ];
-
   function getCol(x) {
     for (const [col, [lo, hi]] of Object.entries(COLS)) {
       if (x >= lo && x < hi) return col;
     }
     return null;
   }
-
   function cleanNum(s) {
     return s.replace(/,/g, '').replace(/[()]/g, '').trim();
   }
-
   function isNumVal(s) {
     if (s === null || s === undefined) return false;
     const c = s.replace(/,/g, '').replace(/[()]/g, '').trim();
     if (c === '') return false;
     return !isNaN(parseFloat(c));
   }
-
   function parseQtyUnit(text) {
-    const m = text.match(/^([\d,]+\.?\d*)\s*(SF|LF|EA|SY|HR|MO|CF|LS|SQ|GL|LB|PR|BX|CS|CY|TN|DA|CAL|GAL|BF|MBF|WK|WKS|DAY|DY|RL|PC|FT|IN|VLF|CLF|SET|JOB|UNIT)$/i);
+    const m = text.match(/^([\d,]+\.?\d*)\s*(SF|LF|EA|SY|HR|MO|CF|LS|SQ|GL|LB|PR|BX|CS|CY|TN|DA|CAL|GAL|BF|MBF|WK|WKS|DAY|DY)$/i);
     if (m) return { qty: cleanNum(m[1]), unit: m[2].toUpperCase() };
     return null;
   }
-
   function hasDoubledChars(text) {
     if (text.length < 4) return false;
     let doubled = 0;
@@ -486,20 +438,16 @@ async function parseXactimatePDF(arrayBuffer) {
     }
     return doubled >= Math.floor(text.length / 3);
   }
-
   function isDimension(text, x) {
     return x < 200 && /^[\d]+'?"?$/.test(text.trim());
   }
-
   const results = [];
   let currentRoom = 'General';
   let currentRoomCode = 'GENERAL';
-
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
     const viewport = page.getViewport({ scale: 1.0 });
     const textContent = await page.getTextContent({ includeMarkedContent: false });
-
     let words = textContent.items
       .filter(item => item.str && item.str.trim())
       .map(item => ({
@@ -509,14 +457,12 @@ async function parseXactimatePDF(arrayBuffer) {
       }))
       .filter(w => !hasDoubledChars(w.text))
       .filter(w => !isDimension(w.text, w.x0));
-
     // DEBUG — log every word on this page so we can see what the PDF contains
     if (pageNum <= 2) {
       console.group(`PAGE ${pageNum} — ${words.length} words, viewport ${Math.round(viewport.width)}x${Math.round(viewport.height)}`);
       words.slice(0, 60).forEach(w => console.log(`  top=${Math.round(w.top).toString().padStart(4)} x0=${Math.round(w.x0).toString().padStart(4)}  "${w.text}"`));
       console.groupEnd();
     }
-
     const headerWords = words.filter(w => w.top < 150).sort((a, b) => a.x0 - b.x0);
     const headerText = headerWords.map(w => w.text).join(' ');
     const contMatch = headerText.match(/CONTINUED\s*-\s*(.+)/);
@@ -524,7 +470,6 @@ async function parseXactimatePDF(arrayBuffer) {
       currentRoom = contMatch[1].trim();
       currentRoomCode = currentRoom.toUpperCase().replace(/[^A-Z0-9]/g, '_');
     }
-
     let colHeaderTop = null;
     for (const w of words) {
       if (w.text === 'DESCRIPTION' && w.x0 < 100) {
@@ -532,7 +477,6 @@ async function parseXactimatePDF(arrayBuffer) {
         break;
       }
     }
-
     if (!contMatch && colHeaderTop) {
       const titleWords = words.filter(w =>
         w.top > 100 && w.top < colHeaderTop &&
@@ -545,42 +489,55 @@ async function parseXactimatePDF(arrayBuffer) {
         if (!titleLineMap[key]) titleLineMap[key] = [];
         titleLineMap[key].push(w);
       }
-      for (const key of Object.keys(titleLineMap).sort((a, b) => a - b)) {
+      // Pick the title CLOSEST to the column header (highest top value that's still above it)
+      // This ensures "Kitchen" wins over "Main Level" when both appear on the page
+      const sortedKeys = Object.keys(titleLineMap).map(Number).sort((a, b) => b - a); // descending = closest to header first
+      for (const key of sortedKeys) {
         const lw = titleLineMap[key].sort((a, b) => a.x0 - b.x0);
         const candidate = lw.map(w => w.text).join(' ').trim();
         if (candidate && !/\d/.test(candidate) &&
             candidate.split(' ').length >= 1 &&
             candidate.split(' ').length <= 4 &&
-            !candidate.startsWith('***')) {
+            !candidate.startsWith('***') &&
+            !['Main Level','Level 2','Level 3','Roof','Exterior','Interior','General Conditions','M. E. P.'].includes(candidate)) {
           currentRoom = candidate;
           currentRoomCode = candidate.toUpperCase().replace(/[^A-Z0-9]/g, '_');
           break;
         }
       }
+      // If no specific room found, fall back to any valid title (including level names)
+      if (currentRoom === 'General' || currentRoom === currentRoomCode) {
+        for (const key of sortedKeys) {
+          const lw = titleLineMap[key].sort((a, b) => a.x0 - b.x0);
+          const candidate = lw.map(w => w.text).join(' ').trim();
+          if (candidate && !/\d/.test(candidate) &&
+              candidate.split(' ').length >= 1 &&
+              candidate.split(' ').length <= 4 &&
+              !candidate.startsWith('***')) {
+            currentRoom = candidate;
+            currentRoomCode = candidate.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+            break;
+          }
+        }
+      }
     }
-
     const lineMap = {};
     for (const w of words) {
       const key = Math.round(w.top / 4) * 4;
       if (!lineMap[key]) lineMap[key] = [];
       lineMap[key].push(w);
     }
-
     const SKIP_PHRASES = ['YA Group','Chattanooga','WE-','DESCRIPTION','QUANTITY',
                           'Page:','CONTINUED','Grand Total','Height:',
                           'YOUNG &','Nashville','Jackson','Insured:','Property:'];
-
     let pendingIdx = null;
-
     for (const topKey of Object.keys(lineMap).sort((a, b) => a - b)) {
       // Skip anything at or above the DESCRIPTION column header (sketch diagrams, room measurements, page headers)
       if (colHeaderTop !== null && Number(topKey) <= colHeaderTop) continue;
       const lw = lineMap[topKey].sort((a, b) => a.x0 - b.x0);
       const lineText = lw.map(w => w.text).join(' ');
-
-      if (SKIP_PHRASES.some(s => lineText.includes(s))) { pendingIdx = null; continue; }
+      if (SKIP_PHRASES.some(s => lineText.includes(s))) continue;
       if (/^\s*(Totals?|Total):/.test(lineText) || lineText.includes('Line Item Totals')) { pendingIdx = null; continue; }
-
       const first = lw[0]?.text || '';
       // Line items are a single token: "1. Description text..."
       const lineNumMatch = first.match(/^(\d+)\.\s*/);
@@ -588,21 +545,16 @@ async function parseXactimatePDF(arrayBuffer) {
       const descStart = first.replace(/^\d+\.\s*/, '') || (lw[1]?.text || '');
       const isLineItem = lineNumMatch !== null &&
         !/^\s*(SF|LF|SY|CY|SQ|EA)\b/i.test(descStart) &&
-        !/^\d+$/.test(descStart.trim()) && // e.g. "0.33" → descStart="33" → not a line item
-        /^[A-Za-z]/i.test(descStart.trim()); // e.g. "15 % waste" → descStart="% waste..." → not a line item
-
+        !/^\d+$/.test(descStart.trim()); // e.g. "0.33" → descStart="33" → not a line item
       if (!isLineItem && lw[0]?.x0 < 50 && lw.length <= 5 &&
           !lw.some(w => isNumVal(w.text)) &&
           lw.some(w => w.text.endsWith(':'))) continue;
-
       if (isLineItem) {
         // Description is everything after "N. " in the first token, plus any x0<200 continuation words
         const descFromFirst = first.replace(/^\d+\.\s*/, '');
         const descWords = lw.filter(w => w.x0 < 200 && w !== lw[0]);
         const desc = (descFromFirst + ' ' + descWords.map(w => w.text).join(' ')).trim();
-
         let qty = '', unit = '', unitPrice = '', tax = '', oap = '', rcv = '', deprec = '', acv = '';
-
         for (const w of lw) {
           const col = getCol(w.x0);
           if (col === 'qty') {
@@ -613,16 +565,16 @@ async function parseXactimatePDF(arrayBuffer) {
           } else if (col && isNumVal(w.text)) {
             const n = cleanNum(w.text);
             const isNeg = w.text.startsWith('(');
-            if      (col === 'unit_price' && !unitPrice) unitPrice = n;
-            else if (col === 'tax'        && !tax)       tax = n;
-            else if (col === 'oap'        && !oap)       oap = n;
-            else if (col === 'rcv'        && !rcv)       rcv = n;
-            else if (col === 'deprec'     && !deprec)    deprec = n;
-            else if (col === 'acv'        && !acv)       acv = n;
-            else if (isNeg               && !deprec)     deprec = n; // fallback: parenthesized value = depreciation
+            if (isNeg) {
+              if (deprec === '') deprec = n;
+            } else if (col === 'unit_price' && unitPrice === '') unitPrice = n;
+            else if (col === 'tax'          && tax === '')       tax = n;
+            else if (col === 'oap'          && oap === '')       oap = n;
+            else if (col === 'rcv'          && rcv === '')       rcv = n;
+            else if (col === 'deprec'       && deprec === '')    deprec = n;
+            else if (col === 'acv'          && acv === '')       acv = n;
           }
         }
-
         pendingIdx = results.length;
         const row = {};
         for (const c of COLUMNS) row[c] = '';
@@ -630,16 +582,15 @@ async function parseXactimatePDF(arrayBuffer) {
         row['Group Code'] = currentRoomCode;
         row['Group Description'] = currentRoom;
         row['Desc'] = desc;
-        row['Qty'] = qty ? parseFloat(qty) : '';
+        row['Qty'] = qty !== '' ? parseFloat(qty) : '';
         row['Unit'] = unit;
-        row['Unit Cost'] = unitPrice ? parseFloat(unitPrice) : '';
-        row['O&P'] = oap ? parseFloat(oap) : '';
-        row['Sales Tax'] = tax ? parseFloat(tax) : '';
-        row['RCV'] = rcv ? parseFloat(rcv) : '';
-        row['Depreciation Amount'] = deprec ? parseFloat(deprec) : '';
-        row['ACV'] = acv ? parseFloat(acv) : '';
+        row['Unit Cost'] = unitPrice !== '' ? parseFloat(unitPrice) : '';
+        row['O&P'] = oap !== '' ? parseFloat(oap) : '';
+        row['Sales Tax'] = tax !== '' ? parseFloat(tax) : '';
+        row['RCV'] = rcv !== '' ? parseFloat(rcv) : '';
+        row['Depreciation Amount'] = deprec !== '' ? parseFloat(deprec) : '';
+        row['ACV'] = acv !== '' ? parseFloat(acv) : '';
         results.push(row);
-
       } else if (pendingIdx !== null) {
         // Pick up numeric column values first — some PDFs place all pricing
         // on the continuation (wrapped) line rather than the first line.
@@ -648,47 +599,39 @@ async function parseXactimatePDF(arrayBuffer) {
           const col = getCol(w.x0);
           if (col === 'qty') {
             const qu = parseQtyUnit(w.text);
-            if (qu) {
-              const parsedQty = parseFloat(qu.qty);
-              pr['Qty'] = isNaN(parsedQty) ? '' : parsedQty;
-              pr['Unit'] = qu.unit;
-            } else if (!qu && isNumVal(w.text) && !pr['Unit Cost']) {
-              const parsedUC = parseFloat(cleanNum(w.text));
-              pr['Unit Cost'] = isNaN(parsedUC) ? '' : parsedUC;
-            }
+            if (qu && pr['Qty'] === '') { pr['Qty'] = parseFloat(qu.qty); pr['Unit'] = qu.unit; }
+            else if (!qu && isNumVal(w.text) && pr['Unit Cost'] === '') { pr['Unit Cost'] = parseFloat(cleanNum(w.text)); }
           } else if (col && isNumVal(w.text)) {
-            const raw = parseFloat(cleanNum(w.text));
-            const n = isNaN(raw) ? '' : raw;
+            const n = parseFloat(cleanNum(w.text)) || '';
             const isNeg = w.text.startsWith('(');
-            if      (col === 'unit_price' && !pr['Unit Cost'])           pr['Unit Cost'] = n;
-            else if (col === 'tax'        && !pr['Sales Tax'])           pr['Sales Tax'] = n;
-            else if (col === 'oap'        && !pr['O&P'])                 pr['O&P'] = n;
-            else if (col === 'rcv'        && !pr['RCV'])                 pr['RCV'] = n;
-            else if (col === 'deprec'     && !pr['Depreciation Amount']) pr['Depreciation Amount'] = n;
-            else if (col === 'acv'        && !pr['ACV'])                 pr['ACV'] = n;
-            else if (isNeg               && !pr['Depreciation Amount'])  pr['Depreciation Amount'] = n;
+            if (isNeg) {
+              if (pr['Depreciation Amount'] === '') pr['Depreciation Amount'] = n;
+            } else {
+              if      (col === 'unit_price' && pr['Unit Cost'] === '')           pr['Unit Cost'] = n;
+              else if (col === 'tax'        && pr['Sales Tax'] === '')           pr['Sales Tax'] = n;
+              else if (col === 'oap'        && pr['O&P'] === '')                 pr['O&P'] = n;
+              else if (col === 'rcv'        && pr['RCV'] === '')                 pr['RCV'] = n;
+              else if (col === 'deprec'     && pr['Depreciation Amount'] === '') pr['Depreciation Amount'] = n;
+              else if (col === 'acv'        && pr['ACV'] === '')                 pr['ACV'] = n;
+            }
           }
         }
         const contText = lw.filter(w => w.x0 < 200).map(w => w.text).join(' ').trim();
         if (!contText) continue;
-        if (contText.startsWith('*') || /\d+\s*%\s*waste/i.test(contText)) {
-          if (!results[pendingIdx]['Note 1']) {
-            results[pendingIdx]['Note 1'] = contText.replace(/\*/g, '').trim();
-          }
-          // keep pendingIdx active — more continuation data may follow
+        if (contText.startsWith('*')) {
+          results[pendingIdx]['Note 1'] = contText.replace(/\*/g, '').trim();
+          pendingIdx = null;
         } else {
           results[pendingIdx]['Desc'] += ' ' + contText;
         }
       }
     }
   }
-
-  // Filter out sketch measurement rows (no pricing data) and renumber
-  const filtered = results.filter(r => r['Qty'] || r['Unit Cost'] || r['RCV'] || r['O&P']);
+  // Filter out sketch measurement rows (no pricing data at all) and renumber
+  const filtered = results.filter(r => r['Qty'] !== '' || r['Unit Cost'] !== '' || r['RCV'] !== '' || r['O&P'] !== '');
   filtered.forEach((r, i) => { r['#'] = String(i + 1); });
   return filtered;
 }
-
 // ─── Excel generation ─────────────────────────────────────────────────────────
 function buildExcel(rows, filename) {
   // Preferred column order — only columns with at least one non-empty value are included
@@ -705,20 +648,17 @@ function buildExcel(rows, filename) {
   }
   const COLUMNS = COL_ORDER.filter(c => seen.has(c));
   const NUMERIC_COLS = new Set(['Qty','Unit Cost','O&P','Sales Tax','RCV','Depreciation Amount','ACV']);
-
   const wsData = [COLUMNS];
   for (const row of rows) {
     wsData.push(COLUMNS.map(c => {
       const v = row[c];
-      if (!v && v !== 0) return '';
+      if (v === '' || v == null) return '';
       if (NUMERIC_COLS.has(c)) { const n = parseFloat(v); return isNaN(n) ? v : n; }
       return v;
     }));
   }
-
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(wsData);
-
   // Totals row with Excel SUM formulas
   const TOTALS_COLS = new Set(['Qty','O&P','Sales Tax','RCV','Depreciation Amount','ACV']);
   const dataRowCount = rows.length;
@@ -734,61 +674,47 @@ function buildExcel(rows, filename) {
   const fullRange = XLSX.utils.decode_range(ws['!ref']);
   fullRange.e.r = totalsR;
   ws['!ref'] = XLSX.utils.encode_range(fullRange);
-
   // Autofilter on the header row (Excel Table-style)
   ws['!autofilter'] = {
     ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: COLUMNS.length - 1 } })
   };
-
   // Column widths
   ws['!cols'] = COLUMNS.map(c => ({ wch: Math.max(c.length + 2, 12) }));
-
   XLSX.utils.book_append_sheet(wb, ws, 'Line Items');
-
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   return new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
-
 // ─── Main processing pipeline ─────────────────────────────────────────────────
 async function processFile(file) {
   if (!file || file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
     showError('Please select a valid PDF file.');
     return;
   }
-
   outputFilename = file.name.replace(/\.pdf$/i, '.xlsx');
   $('download-btn').textContent = '';
   $('download-btn').innerHTML = `
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     Download ${outputFilename}`;
   $('proc-filename').textContent = file.name;
-
   showZone('processing-zone');
   setProgress(10, 1);
-
   try {
     // Step 1: Read PDF
     const buffer = await file.arrayBuffer();
     setProgress(35, 1);
-
     // Step 2: Parse
     setProgress(40, 2);
     const rows = await parseXactimatePDF(buffer);
     setProgress(75, 2);
-
     // Step 3: Build Excel
     setProgress(80, 3);
     xlsxBlob = buildExcel(rows, outputFilename);
     setProgress(100, 3);
-
     // Count rooms
     const rooms = new Set(rows.map(r => r['Group Code']).filter(Boolean));
-
     await new Promise(r => setTimeout(r, 400)); // brief pause for UX
-
     $('ready-counts').innerHTML =
       `<span>${rows.length}</span> line items extracted from <span>${rooms.size}</span> room${rooms.size !== 1 ? 's' : ''}`;
-
     showZone('ready-zone');
   } catch (err) {
     console.error(err);
@@ -796,11 +722,9 @@ async function processFile(file) {
     showZone('upload-zone');
   }
 }
-
 // ─── Event wiring ─────────────────────────────────────────────────────────────
 const uploadZone = $('upload-zone');
 const fileInput = $('file-input');
-
 uploadZone.addEventListener('click', e => {
   if (e.target.id !== 'browse-btn') return;
   fileInput.click();
@@ -812,11 +736,9 @@ $('browse-btn').addEventListener('click', e => {
 uploadZone.addEventListener('keydown', e => {
   if (e.key === 'Enter' || e.key === ' ') fileInput.click();
 });
-
 fileInput.addEventListener('change', e => {
   if (e.target.files[0]) processFile(e.target.files[0]);
 });
-
 uploadZone.addEventListener('dragover', e => {
   e.preventDefault();
   uploadZone.classList.add('drag-over');
@@ -828,7 +750,6 @@ uploadZone.addEventListener('drop', e => {
   const file = e.dataTransfer.files[0];
   if (file) processFile(file);
 });
-
 $('download-btn').addEventListener('click', () => {
   if (!xlsxBlob) return;
   const url = URL.createObjectURL(xlsxBlob);
@@ -838,7 +759,6 @@ $('download-btn').addEventListener('click', () => {
   a.click();
   URL.revokeObjectURL(url);
 });
-
 $('convert-another-btn').addEventListener('click', () => {
   xlsxBlob = null;
   fileInput.value = '';
